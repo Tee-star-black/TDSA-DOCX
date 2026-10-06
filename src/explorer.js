@@ -1,6 +1,4 @@
 import {randomUUID,createHash} from 'node:crypto';
-import {mkdirSync,writeFileSync,renameSync} from 'node:fs';
-import {join} from 'node:path';
 import {AppError} from './store.js';
 
 export function explorer(store,dataDir){
@@ -33,8 +31,7 @@ export function explorer(store,dataDir){
   else if(ext==='txt'&&!bytes.includes(0)&&!bytes.toString('utf8').includes('\uFFFD'))mime='text/plain; charset=utf-8';
   else throw new AppError(422,'This milestone accepts PDF and UTF-8 TXT files only');
   const title=existing?.title??name(input.title??filename);const hash=createHash('sha256').update(bytes).digest('hex');
-  const objects=join(dataDir,'objects');mkdirSync(objects,{recursive:true});const target=join(objects,hash);const temp=join(objects,randomUUID()+'.tmp');writeFileSync(temp,bytes);renameSync(temp,target);
-  db.exec('BEGIN IMMEDIATE');try{const now=new Date().toISOString();id??=randomUUID();
+  db.exec('BEGIN IMMEDIATE');try{store.putBlob(hash,bytes);const now=new Date().toISOString();id??=randomUUID();
    if(!existing)db.prepare('INSERT INTO files(id,folder_id,facility_id,title,created_at) VALUES (?,?,?,?,?)').run(id,parent,actor.facilityId,title,now);
    const version=Number(db.prepare('SELECT COALESCE(MAX(version),0)+1 AS n FROM file_versions WHERE file_id=?').get(id).n);
    db.prepare('INSERT INTO file_versions VALUES (?,?,?,?,?,?,?,?,?)').run(randomUUID(),id,version,filename,mime,hash,bytes.length,actor.id,now);

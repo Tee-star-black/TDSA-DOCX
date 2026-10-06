@@ -65,3 +65,13 @@ Errors: 422 with field errors; 409 for stale drafts or immutable records; 404 fo
 Complaint creation is rejected by clinician APIs. Patients cannot use document-explorer or staff-case APIs. The local demo identities are selected by these routes for development only; production must verify identity/roles independently of route names, browser claims and client input.
 
 Staff case management currently keeps the latest note/status and an audit event for each change, not a full immutable investigation-note history. Add optimistic concurrency and complete note history before a multi-user release.
+
+## Database workspace milestone
+
+- `POST /api/imports`: authenticated demo-staff ZIP ingestion using JSON base64; max 10 MiB decoded archive, 1,000 entries, 50 MiB total expansion, 10 MiB per entry. ZIP filenames are never used as filesystem paths. CRC, structure, compression and path checks run before import. PDF checking covers signature only, not clinical content.
+- `GET /api/database`: connectivity, SQLite integrity, schema version, counts and stored bytes.
+- `POST /api/database/backup`: CSRF-protected download of a consistent SQLite snapshot including stored file blobs.
+- Database startup creates compatible tables, preserves existing organisation/records, and migrates recognised file-system contents after hash verification.
+- Imported and uploaded blobs live transactionally in `file_blobs`; metadata and file-version references remain separate. No cloud database has been provisioned.
+- Import archive hashes provide retry deduplication. Restricted suspected scans keep metadata only. Owner review remains mandatory before sharing; filename heuristics cannot prove that a PDF contains no identifying records.
+- The server excludes patient-entry complaint templates from clinician document listings and direct source-file access. Patient APIs still expose only patient form definitions and own-record operations.

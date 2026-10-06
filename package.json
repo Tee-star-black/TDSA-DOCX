@@ -1,6 +1,20 @@
 {
-  "name": "tdsa-docx", "version": "0.2.0", "private": true,
+  "name": "tdsa-docx",
+  "version": "0.3.0",
+  "private": true,
   "description": "TDSA document library and local form pilot",
-  "type": "module", "engines": {"node": ">=24 <25"},
-  "scripts": {"start": "node src/server.js", "dev": "node --watch src/server.js", "test": "node --test", "check": "node --check src/server.js && node --check src/explorer.js && node --check src/store.js && node --check src/forms.js && node --check public/app.js", "import:documents": "python scripts/import_documents.py"}
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "dev": "node --env-file-if-exists=.env --watch src/server.js",
+    "test": "node --test",
+    "check": "node --check src/server.js && node --check src/explorer.js && node --check src/store.js && node --check src/forms.js && node --check public/app.js && node --check src/zip.js && node --check src/ingest.js && node --check scripts/database.js",
+    "import:documents": "python scripts/import_documents.py",
+    "db:init": "node --env-file-if-exists=.env scripts/database.js init",
+    "db:status": "node --env-file-if-exists=.env scripts/database.js status",
+    "db:restore": "node --env-file-if-exists=.env scripts/database.js restore"
+  }
 }

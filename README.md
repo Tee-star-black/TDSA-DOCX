@@ -15,20 +15,21 @@ npm start
 
 Open **http://127.0.0.1:8795** for the clinician document explorer. Open **http://127.0.0.1:8795/patient** for the separate patient feedback interface. Stop with Ctrl+C. For automatic server reload use `npm run dev`. Browser code is served directly; refresh after changing it.
 
-To view the original PDFs, install Python 3 and run:
+## Import your document ZIP from the app
 
-```powershell
-npm run import:documents -- "C:\path\to\sop.zip"
-```
+1. Open the clinician explorer and click **Import document ZIP**.
+2. Select your original document ZIP (up to 10 MiB). No Python installation or separate catalogue is required.
+3. PDFs are stored in SQLite and grouped into folders. Exact duplicates are detected; repeat imports are safe. Synthetic examples disappear after the first successful source import.
+4. Open a folder, search a document, and preview/download it. Moving a document preserves its contents.
 
-If your machine uses the Python launcher instead: `py scripts/import_documents.py "C:\path\to\sop.zip"`.
+New metadata is inferred from filenames and remains pending review; this is not OCR, clinical validation or publication. Known private catalogue metadata is retained where available. Suspected scan bundles are restricted and their contents are not imported for viewing. Filename-based scan detection is a convenience, not a guarantee: an owner must review every imported file for identifying/completed-record content before live sharing. Patient complaint-entry templates are excluded from clinician catalogue views; digital complaint entry belongs in the separate patient interface.
 
-First extract the separately supplied private catalogue ZIP into the project root so `.data/catalogue.json` exists. The server uses it instead of the synthetic examples.
-
-The import checks every expected PDF hash before writing, skips restricted entries, and places files in ignored `.data/documents/`. Import does not constitute clinical approval. Original PDFs and completed records must never be committed to this public repository.
+Original sources, real metadata, database files and records must never be committed to this public repository. The earlier Python/ private-catalogue import remains an optional legacy path; restarting the server migrates recognised legacy file contents into the database.
 
 ## Included
 
+- One-click document ZIP import and automatic folder organisation.
+- Database status, a downloadable complete workspace backup and checked restore.
 - Synthetic catalogue examples. A separately supplied private source catalogue supports original identifiers, dates, hashes and review notes without exposing them in Git.
 - Persistent folders/subfolders with breadcrumbs, a folder tree and workspace-wide metadata search.
 - Folder creation, rename and move; cycle and sibling-name conflict checks.
@@ -48,7 +49,7 @@ npm run check
 npm test
 ```
 
-The `.data/pilot.sqlite` database, locally imported PDFs, uploaded files and version history persist between restarts. Uploaded bytes live in `.data/objects/`, separate from database metadata. Tests use disposable databases. Back up this folder for local test-work continuity; do not share it with real records. Removing `.data` resets local drafts and imports.
+The `.data/pilot.sqlite` SQLite database stores folders, source metadata, uploaded/imported file contents, versions, form records, cases and audit events. The database is created and tables are initialised automatically at startup. Known legacy file-system contents migrate into database blobs after a hash check; originals are unchanged. Tests use disposable databases. Removing `.data` resets the workspace.
 
 ## Deliberate boundaries
 
@@ -63,3 +64,23 @@ Read [the integration contract](docs/integration.md), [source review notes](docs
 Patient APIs are namespaced under `/api/patient/` and expose only patient form definitions and the demo patient’s own submissions/print view. Clinician APIs reject complaint creation; staff complaint access uses explicit management routes. The demo staff actor has `documents.manage` and `complaints.manage` permissions. These are local test identities, not a production security boundary: any local user can open either surface. Replace them with verified host-app users and roles before live use.
 
 Source catalogue versions and uploaded-file versions are distinct. Upload version history is durable, but clinical approval/publication and signed final record snapshots remain future work. PDF and UTF-8 TXT are the upload types supported in this milestone; Office documents and images are not yet supported.
+
+## Database operations
+
+The **Database & backup** screen displays connectivity, integrity, record counts and stored bytes. Click **Download backup** to export a consistent SQLite snapshot containing database-stored file contents and records. Keep backups private; they are not password-encrypted by this application.
+
+```powershell
+npm run db:init
+npm run db:status
+```
+
+To restore, stop the app with Ctrl+C first:
+
+```powershell
+npm run db:restore -- "C:\path\to\TDSA-workspace-backup.sqlite" --confirm
+npm start
+```
+
+Restore validates the backup, refuses while the known local server process is running, and preserves a consistent pre-restore copy of the current database. It replaces the current workspace, so use the correct backup. Database-stored contents are restored without needing the original source ZIP. Restricted/excluded originals are not part of the backup.
+
+Optionally copy `.env.example` to `.env` to choose the port or a persistent `TDSA_DATA_DIR`. `.env` and workspace data are ignored by Git. The demo uses one local database; it is not yet connected to a shared PostgreSQL/Cloud SQL service or the official app identity system.

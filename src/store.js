@@ -7,15 +7,20 @@ import {validateSubmission} from './forms.js';
 export class AppError extends Error {constructor(status,message,errors={}){super(message);this.status=status;this.errors=errors;}}
 export function openStore(filename, cataloguePath) {
   if(filename!==':memory:') mkdirSync(dirname(filename),{recursive:true});
-  const db=new DatabaseSync(filename); db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;');
+  const db=new DatabaseSync(filename); db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
   db.exec(`CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY, metadata TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS submissions(id TEXT PRIMARY KEY, template_id TEXT NOT NULL, template_version INTEGER NOT NULL, facility_id TEXT NOT NULL, author_id TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('draft','submitted')), data TEXT NOT NULL, revision INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, submitted_at TEXT);
     CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, submission_id TEXT NOT NULL UNIQUE REFERENCES submissions(id), facility_id TEXT NOT NULL, type TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY, actor_id TEXT NOT NULL, action TEXT NOT NULL, record_id TEXT NOT NULL, created_at TEXT NOT NULL);`);
+  db.exec(`CREATE TABLE IF NOT EXISTS file_blobs(hash TEXT PRIMARY KEY, content BLOB NOT NULL, created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS imports(id TEXT PRIMARY KEY, archive_hash TEXT NOT NULL, facility_id TEXT NOT NULL, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, summary TEXT NOT NULL, UNIQUE(archive_hash,facility_id));
+    CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);`);
+  db.prepare('INSERT OR IGNORE INTO schema_migrations VALUES (?,?)').run(1,new Date().toISOString());
   const catalogue=JSON.parse(readFileSync(cataloguePath,'utf8'));
   const insert=db.prepare('INSERT INTO documents VALUES (?,?) ON CONFLICT(id) DO UPDATE SET metadata=excluded.metadata');
   db.exec('BEGIN;');
-  try {for(const item of catalogue) insert.run(item.id,JSON.stringify(item));db.exec('COMMIT');}
+  try {const persisted=Number(db.prepare('SELECT COUNT(*) AS n FROM documents').get().n)>0;
+    for(const item of catalogue) if(!persisted || !item.id.startsWith('demo-')) insert.run(item.id,JSON.stringify(item));db.exec('COMMIT');}
   catch(error){db.exec('ROLLBACK');throw error;}
   const audit=(actor,action,id)=>db.prepare('INSERT INTO audit(actor_id,action,record_id,created_at) VALUES (?,?,?,?)').run(actor.id,action,id,new Date().toISOString());
   function getSubmission(id,actor){
@@ -54,6 +59,9 @@ export function openStore(filename, cataloguePath) {
   }
   return {
     db,save,getSubmission,audit,
+    putBlob:(hash,content)=>db.prepare('INSERT OR IGNORE INTO file_blobs VALUES (?,?,?)').run(hash,content,new Date().toISOString()),
+    hasBlob:hash=>Boolean(db.prepare('SELECT 1 AS present FROM file_blobs WHERE hash=?').get(hash)),
+    getBlob:hash=>{const row=db.prepare('SELECT content FROM file_blobs WHERE hash=?').get(hash);return row?Buffer.from(row.content):null;},
     documents:()=>db.prepare('SELECT metadata FROM documents').all().map(r=>JSON.parse(r.metadata)),
     submissions:actor=>db.prepare('SELECT * FROM submissions WHERE facility_id=? AND author_id=? ORDER BY updated_at DESC').all(actor.facilityId,actor.id).map(map),
     cases:actor=>db.prepare('SELECT cases.* FROM cases JOIN submissions ON submissions.id=cases.submission_id WHERE cases.facility_id=? AND submissions.author_id=? ORDER BY cases.created_at DESC').all(actor.facilityId,actor.id),
