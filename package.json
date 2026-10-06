@@ -1,0 +1,6 @@
+{
+  "name": "tdsa-docx", "version": "0.1.0", "private": true,
+  "description": "TDSA document library and local form pilot",
+  "type": "module", "engines": {"node": ">=24 <25"},
+  "scripts": {"start": "node src/server.js", "dev": "node --watch src/server.js", "test": "node --test", "check": "node --check src/server.js && node --check src/store.js && node --check src/forms.js && node --check public/app.js", "import:documents": "python scripts/import_documents.py"}
+}

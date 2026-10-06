@@ -1,0 +1,62 @@
+[
+  {
+    "id": "demo-001",
+    "filename": "synthetic-example-1.pdf",
+    "title": "Example reference document",
+    "kind": "SOP",
+    "category": "Example category",
+    "facility": "Synthetic demo facility",
+    "code": "DEMO-001",
+    "version": "1.0",
+    "effectiveDate": null,
+    "reviewDate": null,
+    "status": "review",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "pages": 1,
+    "restricted": false,
+    "issues": [
+      "Synthetic catalogue entry. Replace with a private reviewed source catalogue."
+    ],
+    "templateId": null
+  },
+  {
+    "id": "demo-002",
+    "filename": "synthetic-example-2.pdf",
+    "title": "Example feedback template",
+    "kind": "Form",
+    "category": "Patient experience",
+    "facility": "Synthetic demo facility",
+    "code": "DEMO-002",
+    "version": "1.0",
+    "effectiveDate": null,
+    "reviewDate": null,
+    "status": "review",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "pages": 1,
+    "restricted": false,
+    "issues": [
+      "Synthetic catalogue entry. Replace with a private reviewed source catalogue."
+    ],
+    "templateId": "complaint"
+  },
+  {
+    "id": "demo-003",
+    "filename": "synthetic-example-3.pdf",
+    "title": "Example restricted bundle",
+    "kind": "Scanned bundle",
+    "category": "Governance & review",
+    "facility": "Synthetic demo facility",
+    "code": "DEMO-003",
+    "version": "1.0",
+    "effectiveDate": null,
+    "reviewDate": null,
+    "status": "review",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "pages": 1,
+    "restricted": true,
+    "issues": [
+      "Synthetic catalogue entry. Replace with a private reviewed source catalogue."
+    ],
+    "templateId": null
+  }
+]
