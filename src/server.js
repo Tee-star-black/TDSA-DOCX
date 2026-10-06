@@ -32,8 +32,10 @@ export function createApp({dataDir=resolve(root,process.env.TDSA_DATA_DIR??'.dat
       const expected=`127.0.0.1:${server.address().port}`;
       if(req.headers.host!==expected && req.headers.host!==`localhost:${server.address().port}`) throw new AppError(403,'Invalid host');
       if(req.headers.origin && ![`http://${expected}`,`http://localhost:${server.address().port}`].includes(req.headers.origin)) throw new AppError(403,'Cross-origin access is blocked');
-      if(req.headers['sec-fetch-site']==='cross-site') throw new AppError(403,'Cross-site access is blocked');
       const actualPath=new URL(req.url,`http://${expected}`).pathname;
+      const appNavigation=req.method==='GET' && ['/', '/patient'].includes(actualPath)
+        && req.headers['sec-fetch-mode']==='navigate' && req.headers['sec-fetch-dest']==='document';
+      if(req.headers['sec-fetch-site']==='cross-site' && !appNavigation) throw new AppError(403,'Cross-site access is blocked');
       const patient=actualPath.startsWith('/api/patient/')||actualPath.startsWith('/patient/records/');
       const actor=patient?patientActor:clinicianActor;const csrf=csrfTokens[actor.surface];
       const path=patient?actualPath.replace(/^\/api\/patient\//,'/api/').replace(/^\/patient\/records\//,'/records/'):actualPath;

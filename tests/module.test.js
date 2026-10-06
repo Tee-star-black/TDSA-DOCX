@@ -12,6 +12,22 @@ import {validateSubmission} from '../src/forms.js';
 const catalogue=fileURLToPath(new URL('../data/catalogue.json',import.meta.url));
 const actor={id:'test-patient',facilityId:'demo-facility',surface:'patient'};
 const feedback=(data={})=>({templateId:'complaint',templateVersion:1,facilityId:actor.facilityId,data:{type:'Complaint',anonymous:true,details:'Synthetic waiting-time feedback',...data}});
+test('external links may navigate to app pages while cross-site APIs and embeds stay blocked',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'tdsa-navigation-'));const {server,store}=createApp({dataDir:dir});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;
+ const request=(path,headers,method='GET')=>new Promise((resolve,reject)=>{
+  const r=http.request(base+path,{method,headers},response=>{response.resume();resolve(response.statusCode);});r.on('error',reject);r.end();
+ });
+ const navigation={'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'};
+ try{
+  assert.equal(await request('/patient',navigation),200);
+  assert.equal(await request('/',navigation),200);
+  assert.equal(await request('/api/patient/session',navigation),403);
+  assert.equal(await request('/patient',{...navigation,'Sec-Fetch-Dest':'iframe'}),403);
+  assert.equal(await request('/patient',{...navigation,'Sec-Fetch-Mode':'cors'}),403);
+  assert.equal(await request('/api/patient/submissions',navigation,'POST'),403);
+ }finally{await new Promise(r=>server.close(r));store.close();rmSync(dir,{recursive:true});}
+});
 test('draft survives database close and reopen',()=>{
  const dir=mkdtempSync(join(tmpdir(),'tdsa-'));const path=join(dir,'test.sqlite');
  let store=openStore(path,catalogue);const r=store.save(feedback(),actor);store.close();
