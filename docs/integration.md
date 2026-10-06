@@ -49,3 +49,19 @@ Errors: 422 with field errors; 409 for stale drafts or immutable records; 404 fo
 - Production relational database migrations, transaction/concurrency checks, backups and restore verification.
 - Approved policy deadlines, clinical fields/rules, consent evidence and final record export snapshots.
 - Rate limiting, monitoring, privacy-safe logs, accessibility and end-to-end clinician-app acceptance.
+
+## Explorer and patient separation milestone
+
+- `/api/explorer`: facility-scoped folder tree, latest file metadata and source-document folder assignments.
+- `POST /api/folders`, `PUT /api/folders/:id`: create, rename and move folders.
+- `POST /api/files`: upload a PDF/TXT via JSON base64; max 4 MiB of decoded bytes.
+- `PUT /api/files/:id`: rename, move, archive or restore.
+- `GET / POST /api/files/:id/versions`: read version metadata or append a new immutable file version.
+- `GET /api/files/:id/content?version=N`: download an exact version. `preview=1` requests an inline preview.
+- `PUT /api/documents/:id/location`: assign a source document to a folder.
+- `GET /api/cases/:id`, `PUT /api/cases/:id`: authorised staff read a submitted case and update assignment/status/notes. Resolving requires a resolution note.
+- `/patient`: separate feedback-entry interface. `/api/patient/session`, `/api/patient/templates`, `/api/patient/submissions` and own-record routes form its local API surface.
+
+Complaint creation is rejected by clinician APIs. Patients cannot use document-explorer or staff-case APIs. The local demo identities are selected by these routes for development only; production must verify identity/roles independently of route names, browser claims and client input.
+
+Staff case management currently keeps the latest note/status and an audit event for each change, not a full immutable investigation-note history. Add optimistic concurrency and complete note history before a multi-user release.

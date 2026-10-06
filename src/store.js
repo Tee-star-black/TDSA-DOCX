@@ -13,20 +13,23 @@ export function openStore(filename, cataloguePath) {
     CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY, submission_id TEXT NOT NULL UNIQUE REFERENCES submissions(id), facility_id TEXT NOT NULL, type TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY, actor_id TEXT NOT NULL, action TEXT NOT NULL, record_id TEXT NOT NULL, created_at TEXT NOT NULL);`);
   const catalogue=JSON.parse(readFileSync(cataloguePath,'utf8'));
-  const insert=db.prepare('INSERT INTO documents VALUES (?,?)');
-  db.exec('BEGIN; DELETE FROM documents;');
+  const insert=db.prepare('INSERT INTO documents VALUES (?,?) ON CONFLICT(id) DO UPDATE SET metadata=excluded.metadata');
+  db.exec('BEGIN;');
   try {for(const item of catalogue) insert.run(item.id,JSON.stringify(item));db.exec('COMMIT');}
   catch(error){db.exec('ROLLBACK');throw error;}
   const audit=(actor,action,id)=>db.prepare('INSERT INTO audit(actor_id,action,record_id,created_at) VALUES (?,?,?,?)').run(actor.id,action,id,new Date().toISOString());
   function getSubmission(id,actor){
     const row=db.prepare('SELECT * FROM submissions WHERE id=? AND author_id=? AND facility_id=?').get(id,actor.id,actor.facilityId);
     if(!row) throw new AppError(404,'Record not found');
+    if(actor.surface && (row.template_id==='complaint')!==(actor.surface==='patient'))throw new AppError(404,'Record not found');
     return map(row);
   }
   function map(r){return {id:r.id,templateId:r.template_id,templateVersion:r.template_version,facilityId:r.facility_id,authorId:r.author_id,status:r.status,data:JSON.parse(r.data),revision:r.revision,createdAt:r.created_at,updatedAt:r.updated_at,submittedAt:r.submitted_at};}
   function save(input,actor,final=false,id=null){
     const v=validateSubmission(input,{final}); if(Object.keys(v.errors).length) throw new AppError(422,'Check the form fields',v.errors);
     if(input.facilityId!==actor.facilityId) throw new AppError(403,'Facility is not authorised');
+    if(v.template.id==='complaint' && actor.surface!=='patient') throw new AppError(403,'Complaint submission belongs to the patient app');
+    if(v.template.id!=='complaint' && actor.surface==='patient') throw new AppError(403,'This form belongs to the clinician app');
     db.exec('BEGIN IMMEDIATE');
     try{
       const now=new Date().toISOString(); let record;

@@ -1,11 +1,11 @@
 export const templates = [
-  {id:'complaint', version:1, title:'Complaint, compliment or suggestion', category:'Patient experience', scope:'facility', description:'Record feedback and create a linked case on submission.', fields:[
+  {id:'complaint', audience:'patient', version:1, title:'Complaint, compliment or suggestion', category:'Patient experience', scope:'facility', description:'Record feedback and create a linked case on submission.', fields:[
     {name:'type',label:'Feedback type',type:'select',options:['Complaint','Compliment','Suggestion'],required:true},
     {name:'anonymous',label:'Submit anonymously',type:'checkbox'},
     {name:'name',label:'Full name',type:'text'}, {name:'contact',label:'Contact number or email',type:'text'},
     {name:'eventDate',label:'Event date',type:'date'}, {name:'area',label:'Area or service',type:'text'},
     {name:'details',label:'What happened?',type:'textarea',required:true}, {name:'desiredOutcome',label:'Requested outcome',type:'textarea'}]},
-  {id:'cleaning', version:1, title:'Daily environmental decontamination log', category:'Infection prevention', scope:'facility', description:'Record a cleaning activity for a room or area.',fields:[
+  {id:'cleaning', audience:'clinician', version:1, title:'Daily environmental decontamination log', category:'Infection prevention', scope:'facility', description:'Record a cleaning activity for a room or area.',fields:[
     {name:'area',label:'Area / room',type:'text',required:true}, {name:'date',label:'Date',type:'date',required:true},
     {name:'time',label:'Time',type:'time',required:true}, {name:'surfaces',label:'Surfaces cleaned',type:'textarea',required:true},
     {name:'disinfectant',label:'Disinfectant used',type:'text',required:true}, {name:'cleaner',label:'Cleaner name',type:'text',required:true},

@@ -10,7 +10,7 @@ import {createApp} from '../src/server.js';
 import {validateSubmission} from '../src/forms.js';
 
 const catalogue=fileURLToPath(new URL('../data/catalogue.json',import.meta.url));
-const actor={id:'test-clinician',facilityId:'demo-facility'};
+const actor={id:'test-patient',facilityId:'demo-facility',surface:'patient'};
 const feedback=(data={})=>({templateId:'complaint',templateVersion:1,facilityId:actor.facilityId,data:{type:'Complaint',anonymous:true,details:'Synthetic waiting-time feedback',...data}});
 test('draft survives database close and reopen',()=>{
  const dir=mkdtempSync(join(tmpdir(),'tdsa-'));const path=join(dir,'test.sqlite');
@@ -25,7 +25,7 @@ test('finalisation is idempotent and creates only one linked feedback case',()=>
 test('submitted records cannot be edited or switched to a different template',()=>{
  const s=openStore(':memory:',catalogue),r=s.save(feedback(),actor);s.save({...feedback(),attested:true,revision:r.revision},actor,true,r.id);
  assert.throws(()=>s.save({...feedback({details:'Changed'}),revision:2},actor,false,r.id),err=>err.status===409);
- assert.throws(()=>s.save({templateId:'cleaning',templateVersion:1,facilityId:actor.facilityId,data:{}},actor,false,r.id),err=>err.status===409);s.close();
+ assert.throws(()=>s.save({templateId:'cleaning',templateVersion:1,facilityId:actor.facilityId,data:{}},actor,false,r.id),err=>err.status===403);s.close();
 });
 test('stale draft revision cannot overwrite a newer save',()=>{
  const s=openStore(':memory:',catalogue),r=s.save(feedback(),actor);s.save({...feedback(),revision:r.revision},actor,false,r.id);
@@ -53,19 +53,19 @@ test('server blocks cross-origin requests, forged hosts and mutations without CS
   const forgedHostStatus=await new Promise((resolve,reject)=>{const request=http.get(base+'/api/documents',{headers:{Host:'evil.example'}},response=>{response.resume();resolve(response.statusCode);});request.on('error',reject);});
   assert.equal(forgedHostStatus,403);
   assert.equal((await fetch(base+'/api/submissions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(feedback())})).status,403);
-  const session=await(await fetch(base+'/api/session')).json();
+  const session=await(await fetch(base+'/api/patient/session')).json();
   const headers={'Content-Type':'application/json','X-CSRF-Token':session.csrfToken};
-  const r=await fetch(base+'/api/submissions',{method:'POST',headers,body:JSON.stringify(feedback())});assert.equal(r.status,201);const draft=await r.json();
-  const final=await fetch(base+'/api/submissions/'+draft.id+'/submit',{method:'POST',headers,body:JSON.stringify({...feedback(),attested:true,revision:draft.revision})});assert.equal(final.status,200);
+  const r=await fetch(base+'/api/patient/submissions',{method:'POST',headers,body:JSON.stringify(feedback())});assert.equal(r.status,201);const draft=await r.json();
+  const final=await fetch(base+'/api/patient/submissions/'+draft.id+'/submit',{method:'POST',headers,body:JSON.stringify({...feedback(),attested:true,revision:draft.revision})});assert.equal(final.status,200);
   assert.equal((await(await fetch(base+'/api/cases')).json()).length,1);
-  assert.equal((await fetch(base+'/records/'+draft.id+'/print')).status,200);
+  assert.equal((await fetch(base+'/patient/records/'+draft.id+'/print')).status,200);
   const docs=await(await fetch(base+'/api/documents')).json();const restricted=docs.find(d=>d.restricted);assert.equal((await fetch(base+'/api/documents/'+restricted.id+'/file')).status,404);
   assert.equal((await fetch(base+'/.data/pilot.sqlite')).status,404);
  }finally{await new Promise(r=>server.close(r));store.close();rmSync(dir,{recursive:true});}
 });
 test('print export escapes user-supplied HTML',async()=>{
  const dir=mkdtempSync(join(tmpdir(),'tdsa-print-'));const {server,store}=createApp({dataDir:dir});await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const demo={id:'local-demo-clinician',facilityId:'demo-facility'};const r=store.save(feedback({details:'<script>alert(1)</script>'}),demo);
- try{const html=await(await fetch(`http://127.0.0.1:${server.address().port}/records/${r.id}/print`)).text();assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('<script>'));}
+ const demo={id:'local-demo-patient',facilityId:'demo-facility',surface:'patient'};const r=store.save(feedback({details:'<script>alert(1)</script>'}),demo);
+ try{const html=await(await fetch(`http://127.0.0.1:${server.address().port}/patient/records/${r.id}/print`)).text();assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('<script>'));}
  finally{await new Promise(r=>server.close(r));store.close();rmSync(dir,{recursive:true});}
 });
