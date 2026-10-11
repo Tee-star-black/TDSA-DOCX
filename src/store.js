@@ -3,9 +3,11 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync,mkdirSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {validateSubmission} from './forms.js';
+import {blobCrypto} from './blob-crypto.js';
 
 export class AppError extends Error {constructor(status,message,errors={}){super(message);this.status=status;this.errors=errors;}}
-export function openStore(filename, cataloguePath) {
+export function openStore(filename, cataloguePath, {encryptionKey=process.env.TDSA_BLOB_KEY_B64}={}) {
+  const crypto=blobCrypto(encryptionKey);
   if(filename!==':memory:') mkdirSync(dirname(filename),{recursive:true});
   const db=new DatabaseSync(filename); db.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
   db.exec(`CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY, metadata TEXT NOT NULL);
@@ -15,7 +17,13 @@ export function openStore(filename, cataloguePath) {
   db.exec(`CREATE TABLE IF NOT EXISTS file_blobs(hash TEXT PRIMARY KEY, content BLOB NOT NULL, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS imports(id TEXT PRIMARY KEY, archive_hash TEXT NOT NULL, facility_id TEXT NOT NULL, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, summary TEXT NOT NULL, UNIQUE(archive_hash,facility_id));
     CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);`);
+  if(!db.prepare('PRAGMA table_info(file_blobs)').all().some(c=>c.name==='encryption'))db.exec('ALTER TABLE file_blobs ADD COLUMN encryption INTEGER NOT NULL DEFAULT 0');
   db.prepare('INSERT OR IGNORE INTO schema_migrations VALUES (?,?)').run(1,new Date().toISOString());
+  try {
+    const blobs=db.prepare('SELECT hash,content,encryption FROM file_blobs').all();
+    for(const row of blobs) if(row.encryption)crypto.decode(row.hash,Buffer.from(row.content),true);
+    if(crypto.enabled){db.exec('BEGIN IMMEDIATE');try{for(const row of blobs){const bytes=Buffer.from(row.content);if(!row.encryption)db.prepare('UPDATE file_blobs SET content=?,encryption=1 WHERE hash=?').run(crypto.encode(row.hash,crypto.decode(row.hash,bytes,false)),row.hash);}db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}}
+  } catch(error){db.close();throw error;}
   const catalogue=JSON.parse(readFileSync(cataloguePath,'utf8'));
   const insert=db.prepare('INSERT INTO documents VALUES (?,?) ON CONFLICT(id) DO UPDATE SET metadata=excluded.metadata');
   db.exec('BEGIN;');
@@ -59,9 +67,10 @@ export function openStore(filename, cataloguePath) {
   }
   return {
     db,save,getSubmission,audit,
-    putBlob:(hash,content)=>db.prepare('INSERT OR IGNORE INTO file_blobs VALUES (?,?,?)').run(hash,content,new Date().toISOString()),
+    encryptionStatus:()=>({enabled:crypto.enabled,algorithm:crypto.enabled?'AES-256-GCM':null,scope:'document-bytes-only',metadataEncrypted:false}),
+    putBlob:(hash,content)=>{if(!/^[a-f0-9]{64}$/.test(hash))throw new Error('Invalid document hash');crypto.decode(hash,content,false);return db.prepare('INSERT OR IGNORE INTO file_blobs(hash,content,created_at,encryption) VALUES (?,?,?,?)').run(hash,crypto.encode(hash,content),new Date().toISOString(),Number(crypto.enabled));},
     hasBlob:hash=>Boolean(db.prepare('SELECT 1 AS present FROM file_blobs WHERE hash=?').get(hash)),
-    getBlob:hash=>{const row=db.prepare('SELECT content FROM file_blobs WHERE hash=?').get(hash);return row?Buffer.from(row.content):null;},
+    getBlob:hash=>{const row=db.prepare('SELECT content,encryption FROM file_blobs WHERE hash=?').get(hash);return row?crypto.decode(hash,Buffer.from(row.content),Boolean(row.encryption)):null;},
     documents:()=>db.prepare('SELECT metadata FROM documents').all().map(r=>JSON.parse(r.metadata)),
     submissions:actor=>db.prepare('SELECT * FROM submissions WHERE facility_id=? AND author_id=? ORDER BY updated_at DESC').all(actor.facilityId,actor.id).map(map),
     cases:actor=>db.prepare('SELECT cases.* FROM cases JOIN submissions ON submissions.id=cases.submission_id WHERE cases.facility_id=? AND submissions.author_id=? ORDER BY cases.created_at DESC').all(actor.facilityId,actor.id),

@@ -1,3 +1,5 @@
+> Updated connection handoff: [connect-systems.md](connect-systems.md). The routes below include the original pilot contract.
+
 # Integration contract — draft
 
 This local adapter is **not authentication**. Replace the fixed actor and local CSRF/session bootstrap before hosting. The deployment guard must stay in place until identity, permissions, storage and acceptance checks exist.
@@ -54,7 +56,7 @@ Errors: 422 with field errors; 409 for stale drafts or immutable records; 404 fo
 
 - `/api/explorer`: facility-scoped folder tree, latest file metadata and source-document folder assignments.
 - `POST /api/folders`, `PUT /api/folders/:id`: create, rename and move folders.
-- `POST /api/files`: upload a PDF/TXT via JSON base64; max 4 MiB of decoded bytes.
+- `POST /api/files`: upload a PDF/DOCX/TXT via JSON base64; max 4 MiB of decoded bytes.
 - `PUT /api/files/:id`: rename, move, archive or restore.
 - `GET / POST /api/files/:id/versions`: read version metadata or append a new immutable file version.
 - `GET /api/files/:id/content?version=N`: download an exact version. `preview=1` requests an inline preview.

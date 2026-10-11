@@ -7,18 +7,21 @@ import {openStore,AppError} from './store.js';
 import {templates,DEMO_FACILITY} from './forms.js';
 import {explorer} from './explorer.js';
 import {ingestArchive} from './ingest.js';
+import {documentHub} from './hub.js';
+import {docxText} from './classification.js';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
-const clinicianActor={id:'local-demo-clinician',facilityId:DEMO_FACILITY,surface:'clinician',permissions:['documents.manage','complaints.manage']};
+const clinicianActor={id:'local-demo-clinician',facilityId:DEMO_FACILITY,surface:'clinician',permissions:['documents.manage','documents.restricted','complaints.manage']};
 const patientActor={id:'local-demo-patient',facilityId:DEMO_FACILITY,surface:'patient',permissions:[]};
 const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8'};
 const documentAudience=d=>d.audience??(d.templateId==='complaint'||/(complaint|feedback).*form/i.test(d.filename)?'patient':'clinician');
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export function createApp({dataDir=resolve(root,process.env.TDSA_DATA_DIR??'.data'),cataloguePath=existsSync(join(dataDir,'catalogue.json'))?join(dataDir,'catalogue.json'):join(root,'data/catalogue.json')}={}) {
+export function createApp({encryptionKey=process.env.TDSA_BLOB_KEY_B64,dataDir=resolve(root,process.env.TDSA_DATA_DIR??'.data'),cataloguePath=existsSync(join(dataDir,'catalogue.json'))?join(dataDir,'catalogue.json'):join(root,'data/catalogue.json')}={}) {
   if(process.env.NODE_ENV==='production') throw new Error('Local pilot cannot run in production. Implement host-app authentication and private storage first.');
-  const store=openStore(join(dataDir,'pilot.sqlite'),cataloguePath);
+  const store=openStore(join(dataDir,'pilot.sqlite'),cataloguePath,{encryptionKey});
   const csrfTokens={clinician:randomBytes(32).toString('hex'),patient:randomBytes(32).toString('hex')};
   const files=explorer(store,dataDir);
+  const hub=documentHub(store,files);
   // Move legacy file-system contents into database storage without altering originals.
   const hashes=[...store.documents().filter(d=>!d.restricted).map(d=>({hash:d.sha256,path:join(dataDir,'documents',`${d.sha256}.pdf`)})),...store.db.prepare('SELECT DISTINCT hash FROM file_versions').all().map(v=>({hash:v.hash,path:join(dataDir,'objects',v.hash)}))];
   for(const item of hashes){if(/^[a-f0-9]{64}$/.test(item.hash)&&!store.hasBlob(item.hash)&&existsSync(item.path)){const bytes=readFileSync(item.path);if(createHash('sha256').update(bytes).digest('hex')!==item.hash)throw new Error('Legacy file hash mismatch');store.putBlob(item.hash,bytes);}}
@@ -75,24 +78,31 @@ export function createApp({dataDir=resolve(root,process.env.TDSA_DATA_DIR??'.dat
         res.setHeader('Content-Disposition','attachment; filename="TDSA-workspace-backup.sqlite"');
         try{return send(res,200,readFileSync(backup),'application/vnd.sqlite3');}finally{unlinkSync(backup);}
       }
-      if(path==='/api/explorer' && req.method==='GET')return send(res,200,{folders:files.tree(actor),files:files.files(actor),locations:files.locations(actor)});
+      if(path==='/api/explorer' && req.method==='GET')return send(res,200,{folders:files.tree(actor),files:hub.list(actor),locations:files.locations(actor)});
+      if(path==='/api/hub' && req.method==='GET')return send(res,200,{...hub.status(),categories:hub.categories,documentTypes:hub.documentTypes});
+      if(path==='/api/hub/activity' && req.method==='GET')return send(res,200,hub.activity(actor));
+      if(path==='/api/hub/folders' && req.method==='POST')return send(res,200,hub.setupFolders(actor));
+      if(path==='/api/hub/bulk' && req.method==='POST')return send(res,200,hub.bulk(input,actor));
+      const metaRoute=path.match(/^\/api\/files\/([a-f\d-]{36})\/(metadata|classify)$/);
+      if(metaRoute){if(metaRoute[2]==='metadata' && req.method==='GET')return send(res,200,hub.metadata(metaRoute[1],actor));if(metaRoute[2]==='metadata' && req.method==='PUT')return send(res,200,hub.update(metaRoute[1],input,actor));if(metaRoute[2]==='classify' && req.method==='POST')return send(res,200,await hub.classify(metaRoute[1],actor));}
       if(path==='/api/folders' && req.method==='POST')return send(res,201,files.createFolder(input,actor));
       const folderRoute=path.match(/^\/api\/folders\/([a-f\d-]{36})$/);
       if(folderRoute && req.method==='PUT')return send(res,200,files.updateFolder(folderRoute[1],input,actor));
-      if(path==='/api/files' && req.method==='POST')return send(res,201,files.upload(input,actor));
+      if(path==='/api/files' && req.method==='POST'){const f=files.upload(input,actor);hub.initialise(f.id,actor);return send(res,201,f);}
       const fileRoute=path.match(/^\/api\/files\/([a-f\d-]{36})(?:\/(versions|content))?$/);
       if(fileRoute){
         const id=fileRoute[1],action=fileRoute[2];
         if(!action && req.method==='PUT')return send(res,200,files.updateFile(id,input,actor));
         if(action==='versions' && req.method==='GET')return send(res,200,files.versions(id,actor));
-        if(action==='versions' && req.method==='POST')return send(res,201,files.upload(input,actor,id));
+        if(action==='versions' && req.method==='POST'){const f=files.upload(input,actor,id);hub.initialise(id,actor);return send(res,201,f);}
         if(action==='content' && req.method==='GET'){
           const requested=new URL(req.url,`http://${expected}`).searchParams.get('version');
           const versions=files.versions(id,actor),v=requested?versions.find(v=>String(v.version)===requested):versions[0];
           if(!v)throw new AppError(404,'Version not found');store.audit(actor,'file.downloaded',id);
           res.setHeader('Content-Security-Policy',"default-src 'none'; frame-ancestors 'self'");
           const preview=new URL(req.url,`http://${expected}`).searchParams.get('preview')==='1';
-          res.setHeader('Content-Disposition',`${preview?'inline':'attachment'}; filename="download.${v.mime.startsWith('application/pdf')?'pdf':'txt'}"`);
+          res.setHeader('Content-Disposition',`${preview?'inline':'attachment'}; filename="download.${v.mime.startsWith('application/pdf')?'pdf':v.mime.includes('wordprocessingml')?'docx':'txt'}"`);
+          if(preview&&v.mime.includes('wordprocessingml'))return send(res,200,docxText(store.getBlob(v.hash)),'text/plain; charset=utf-8');
           return send(res,200,store.getBlob(v.hash)??(()=>{throw new AppError(404,'File contents are unavailable');})(),v.mime);
         }
       }
@@ -121,7 +131,7 @@ export function createApp({dataDir=resolve(root,process.env.TDSA_DATA_DIR??'.dat
         const rows=t.fields.map(f=>`<tr><th>${escape(f.label)}</th><td>${escape(s.data[f.name]??'')}</td></tr>`).join('');
         return send(res,200,`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escape(t.title)}</title><link rel="stylesheet" href="/styles.css"></head><body class="print-record"><p class="eyebrow">TDSA / LOCAL DEMO · NOT A LIVE CLINICAL RECORD</p><h1>${escape(t.title)}</h1><p>Record: ${escape(s.id)}<br>Status: ${escape(s.status)} · Template version: ${s.templateVersion}<br>Facility: ${escape(s.facilityId)} · Author: ${escape(s.authorId)}<br>Updated: ${escape(s.updatedAt)}</p><table>${rows}</table><p class="print-help">Use your browser’s Print command to save as PDF.</p></body></html>`,'text/html; charset=utf-8');
       }
-      const asset={'/':'index.html','/patient':'index.html','/app.js':'app.js','/styles.css':'styles.css'}[path];
+      const asset={'/':'index.html','/patient':'index.html','/app.js':'app.js','/styles.css':'styles.css','/hub-ui.js':'hub-ui.js'}[path];
       if(asset && req.method==='GET'){const ext=asset.slice(asset.lastIndexOf('.'));return send(res,200,readFileSync(join(root,'public',asset)),types[ext]);}
       throw new AppError(404,'Not found');
     }catch(error){if(!res.headersSent) send(res,error.status??500,{message:error.status?error.message:'Unexpected server error',errors:error.errors??{}});}

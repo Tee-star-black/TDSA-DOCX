@@ -1,3 +1,5 @@
+> Medical hub UI and document controls are implemented in 0.4. See [rebuild-status.md](rebuild-status.md) for current boundaries and [connect-systems.md](connect-systems.md) for the next integration sequence.
+
 # Next milestones
 
 1. Clinical owner reconciles source versions, branding and scanned templates; CTO confirms host integration and record ownership.

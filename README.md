@@ -1,6 +1,21 @@
-# TDSA DOCX — Document Explorer
+# TDSA DOCX — Medical Document Hub
 
 Working foundation for a TDSA document library and clinical forms module. This release is a **local development pilot**: it uses a synthetic clinician/facility identity, binds to loopback only, and refuses `NODE_ENV=production`. Do not enter real patient or staff information.
+
+## Medical hub rebuild (0.4)
+
+Review branch: `feat/medical-document-hub`, based on `feat/document-module-foundation`.
+
+- Medical folder setup, drag-and-drop uploads and moves, multi-file uploads, list/grid views, search/category filters and bulk move/archive/restore.
+- PDF, DOCX and UTF-8 TXT. DOCX preview shows text; PDF text analysis optionally uses Poppler `pdftotext` (filename fallback when unavailable).
+- Medical category/type, tags, restricted classification, next review date and revision-checked metadata review. New versions reset review.
+- Local classification suggestions requiring confirmation. Cloud AI and scanned-PDF OCR are not connected.
+- Optional AES-256-GCM document-byte encryption via `TDSA_BLOB_KEY_B64`. Metadata/records are not covered; backups need the original key. See the guide before enabling.
+- Honest connection status and facility document activity. The module remains a local preview with demo identities.
+
+[Desktop preview](docs/screenshots/desktop.png) · [Mobile preview](docs/screenshots/mobile.png)
+
+[How to connect TDSA, MedCNX, Drive and Cloud SQL](docs/connect-systems.md) · [Implementation status and remaining work](docs/rebuild-status.md)
 
 ## Run on Windows or Linux
 
@@ -9,7 +24,7 @@ Install Node.js 24 LTS. This foundation has no npm dependencies or installation 
 ```powershell
 git clone https://github.com/Tee-star-black/TDSA-DOCX.git
 cd TDSA-DOCX
-git switch feat/document-module-foundation
+git switch feat/medical-document-hub
 npm start
 ```
 
@@ -33,7 +48,7 @@ Original sources, real metadata, database files and records must never be commit
 - Synthetic catalogue examples. A separately supplied private source catalogue supports original identifiers, dates, hashes and review notes without exposing them in Git.
 - Persistent folders/subfolders with breadcrumbs, a folder tree and workspace-wide metadata search.
 - Folder creation, rename and move; cycle and sibling-name conflict checks.
-- Private PDF/TXT uploads (up to 4 MiB), preview/download, file rename/move, archive/restore and immutable version history.
+- Private PDF/DOCX/TXT uploads (up to 4 MiB), preview/download, file rename/move, archive/restore and immutable version history.
 - Original catalogue documents can be moved into folders without changing their source metadata.
 - Patient-only complaint/compliment/suggestion entry at `/patient`; clinicians get the environmental cleaning form.
 - Authorised demo staff can assign feedback cases, track investigation status and record resolution notes. Original patient submissions remain read-only; staff notes are not returned to patient records.
@@ -63,11 +78,11 @@ Read [the integration contract](docs/integration.md), [source review notes](docs
 
 Patient APIs are namespaced under `/api/patient/` and expose only patient form definitions and the demo patient’s own submissions/print view. Clinician APIs reject complaint creation; staff complaint access uses explicit management routes. The demo staff actor has `documents.manage` and `complaints.manage` permissions. These are local test identities, not a production security boundary: any local user can open either surface. Replace them with verified host-app users and roles before live use.
 
-Source catalogue versions and uploaded-file versions are distinct. Upload version history is durable, but clinical approval/publication and signed final record snapshots remain future work. PDF and UTF-8 TXT are the upload types supported in this milestone; Office documents and images are not yet supported.
+Source catalogue versions and uploaded-file versions are distinct. Upload version history is durable, but clinical approval/publication and signed final record snapshots remain future work. PDF and UTF-8 TXT are the upload types supported in this milestone; Standard DOCX documents are supported; images, macro-enabled Office documents and legacy DOC formats are not.
 
 ## Database operations
 
-The **Database & backup** screen displays connectivity, integrity, record counts and stored bytes. Click **Download backup** to export a consistent SQLite snapshot containing database-stored file contents and records. Keep backups private; they are not password-encrypted by this application.
+The **Database & backup** screen displays connectivity, integrity, record counts and stored bytes. Click **Download backup** to export a consistent SQLite snapshot containing database-stored file contents and records. Keep backups private. The database backup itself is not password-encrypted. Encrypted document bytes require the original key; metadata and form records remain unencrypted.
 
 ```powershell
 npm run db:init

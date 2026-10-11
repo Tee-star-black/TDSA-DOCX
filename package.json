@@ -1,8 +1,8 @@
 {
   "name": "tdsa-docx",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
-  "description": "TDSA document library and local form pilot",
+  "description": "TDSA medical document hub and isolated patient feedback pilot",
   "type": "module",
   "engines": {
     "node": ">=24 <25"
@@ -11,7 +11,7 @@
     "start": "node --env-file-if-exists=.env src/server.js",
     "dev": "node --env-file-if-exists=.env --watch src/server.js",
     "test": "node --test",
-    "check": "node --check src/server.js && node --check src/explorer.js && node --check src/store.js && node --check src/forms.js && node --check public/app.js && node --check src/zip.js && node --check src/ingest.js && node --check scripts/database.js",
+    "check": "node --check src/server.js && node --check src/explorer.js && node --check src/store.js && node --check src/forms.js && node --check public/app.js && node --check src/zip.js && node --check src/ingest.js && node --check scripts/database.js && node --check src/hub.js && node --check src/classification.js && node --check src/blob-crypto.js && node --check public/hub-ui.js",
     "import:documents": "python scripts/import_documents.py",
     "db:init": "node --env-file-if-exists=.env scripts/database.js init",
     "db:status": "node --env-file-if-exists=.env scripts/database.js status",
