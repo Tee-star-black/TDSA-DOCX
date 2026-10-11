@@ -4,12 +4,16 @@ import {fileURLToPath} from 'node:url';
 import {existsSync,readFileSync,copyFileSync,mkdirSync,unlinkSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {createApp} from '../src/server.js';
+import {blobCrypto} from '../src/blob-crypto.js';
 
-export function restoreDatabase(source,target){
+export function restoreDatabase(source,target,{encryptionKey=process.env.TDSA_BLOB_KEY_B64}={}){
+ const crypto=blobCrypto(encryptionKey);
  const db=new DatabaseSync(source,{readOnly:true});
  try{
   if(db.prepare('PRAGMA integrity_check').get().integrity_check!=='ok')throw Error('Backup integrity check failed');
   for(const table of ['schema_migrations','documents','file_blobs','folders','files','file_versions','submissions','cases'])if(!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table))throw Error('Not a compatible TDSA workspace backup');
+  const hasEncoding=db.prepare('PRAGMA table_info(file_blobs)').all().some(c=>c.name==='encryption');
+  for(const row of db.prepare('SELECT hash,content'+(hasEncoding?',encryption':'')+' FROM file_blobs').all())crypto.decode(row.hash,Buffer.from(row.content),Boolean(row.encryption));
  }finally{db.close();}
  const temp=target+'.restore-'+randomUUID();copyFileSync(source,temp);const check=new DatabaseSync(temp);try{check.exec('PRAGMA journal_mode=DELETE;');}finally{check.close();}
  if(existsSync(target)){const current=new DatabaseSync(target);try{current.prepare('VACUUM INTO ?').run(target+'.before-restore-'+Date.now());}finally{current.close();}}

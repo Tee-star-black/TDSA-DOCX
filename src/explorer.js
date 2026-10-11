@@ -1,5 +1,6 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {AppError} from './store.js';
+import {docxText} from './classification.js';
 
 export function explorer(store,dataDir){
  const db=store.db;
@@ -9,7 +10,7 @@ export function explorer(store,dataDir){
  CREATE TABLE IF NOT EXISTS source_locations(document_id TEXT PRIMARY KEY REFERENCES documents(id), folder_id TEXT REFERENCES folders(id));`);
  const permission=(actor)=>{if(!actor.permissions?.includes('documents.manage'))throw new AppError(403,'Document management permission required');};
  const folder=(id,actor)=>{if(id===null)return null;const r=db.prepare('SELECT * FROM folders WHERE id=? AND facility_id=?').get(id,actor.facilityId);if(!r)throw new AppError(404,'Folder not found');return r;};
- const file=(id,actor)=>{const r=db.prepare('SELECT * FROM files WHERE id=? AND facility_id=?').get(id,actor.facilityId);if(!r)throw new AppError(404,'File not found');return r;};
+ const file=(id,actor)=>{const r=db.prepare('SELECT * FROM files WHERE id=? AND facility_id=?').get(id,actor.facilityId);if(!r)throw new AppError(404,'File not found');const restricted=db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='file_metadata'").get()&&db.prepare("SELECT 1 FROM file_metadata WHERE file_id=? AND confidentiality='restricted'").get(id);if(restricted&&!actor.permissions?.includes('documents.restricted'))throw new AppError(404,'File not found');return r;};
  const name=(s)=>{if(typeof s!=='string'||!s.trim()||s.trim().length>150||/[\x00-\x1f/\\]/.test(s))throw new AppError(422,'Use a name of 1–150 characters without slashes');return s.trim();};
  const tree=(actor)=>db.prepare('SELECT * FROM folders WHERE facility_id=? ORDER BY name COLLATE NOCASE').all(actor.facilityId);
  function createFolder(input,actor){permission(actor);const parent=input.parentId??null;folder(parent,actor);const title=name(input.name);
@@ -29,7 +30,8 @@ export function explorer(store,dataDir){
   const filename=name(input.filename);const ext=filename.split('.').pop().toLowerCase();let mime;
   if(ext==='pdf'&&bytes.subarray(0,5).toString()==='%PDF-')mime='application/pdf';
   else if(ext==='txt'&&!bytes.includes(0)&&!bytes.toString('utf8').includes('\uFFFD'))mime='text/plain; charset=utf-8';
-  else throw new AppError(422,'This milestone accepts PDF and UTF-8 TXT files only');
+  else if(ext==='docx'){docxText(bytes);mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document';}
+  else throw new AppError(422,'Choose a PDF, UTF-8 TXT or standard DOCX file');
   const title=existing?.title??name(input.title??filename);const hash=createHash('sha256').update(bytes).digest('hex');
   db.exec('BEGIN IMMEDIATE');try{store.putBlob(hash,bytes);const now=new Date().toISOString();id??=randomUUID();
    if(!existing)db.prepare('INSERT INTO files(id,folder_id,facility_id,title,created_at) VALUES (?,?,?,?,?)').run(id,parent,actor.facilityId,title,now);
@@ -44,7 +46,7 @@ export function explorer(store,dataDir){
  }
  function moveSource(id,input,actor){permission(actor);if(!store.documents().some(d=>d.id===id))throw new AppError(404,'Source document not found');folder(input.folderId??null,actor);db.prepare('INSERT INTO source_locations VALUES (?,?) ON CONFLICT(document_id) DO UPDATE SET folder_id=excluded.folder_id').run(id,input.folderId??null);store.audit(actor,'document.moved',id);}
  return {tree,createFolder,updateFolder,upload,versions,updateFile,moveSource,file,
-  files:actor=>db.prepare('SELECT f.*,v.version,v.filename,v.mime,v.size,v.created_at AS updated_at FROM files f JOIN file_versions v ON v.file_id=f.id WHERE f.facility_id=? AND v.version=(SELECT MAX(version) FROM file_versions WHERE file_id=f.id) ORDER BY f.title COLLATE NOCASE').all(actor.facilityId),
+  files:actor=>db.prepare('SELECT f.*,v.version,v.filename,v.mime,v.size,v.created_at AS updated_at FROM files f JOIN file_versions v ON v.file_id=f.id WHERE f.facility_id=? AND v.version=(SELECT MAX(version) FROM file_versions WHERE file_id=f.id) ORDER BY f.title COLLATE NOCASE').all(actor.facilityId).filter(f=>{try{file(f.id,actor);return true;}catch(error){if(error.status===404)return false;throw error;}}),
   locations:actor=>db.prepare('SELECT l.* FROM source_locations l LEFT JOIN folders f ON f.id=l.folder_id WHERE l.folder_id IS NULL OR f.facility_id=?').all(actor.facilityId)
  };
 }
