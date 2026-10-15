@@ -19,12 +19,13 @@ Review branch: `feat/medical-document-hub`, based on `feat/document-module-found
 
 ## Run on Windows or Linux
 
-Install Node.js 24 LTS. This foundation has no npm dependencies or installation step.
+Install Node.js 24 LTS and the locked dependencies with `npm ci`.
 
 ```powershell
 git clone https://github.com/Tee-star-black/TDSA-DOCX.git
 cd TDSA-DOCX
-git switch feat/medical-document-hub
+git switch codex/production-storage-foundation
+npm ci
 npm start
 ```
 
@@ -70,7 +71,13 @@ The `.data/pilot.sqlite` SQLite database stores folders, source metadata, upload
 
 All source documents remain **pending TDSA review**. There is no production authentication, patient linkage, live patient-app integration, document approval workflow, deadline automation, corrective-action workflow, record amendment, automated TEWS scoring, stored final PDF snapshot, or production database/storage integration yet. Scanned source material requires manual splitting, redaction and completeness review where applicable. Current search covers catalogue metadata, not PDF full text. No role or patient access claims are implied by the local demo identity.
 
-The UI is plain browser JavaScript and the service uses Node's built-in SQLite for a portable, dependency-free first milestone. The API/form definitions are separated from the preview UI so the official app can replace the presentation and persistence layers. Confirm its stack before selecting shared UI packages.
+The UI is plain browser JavaScript and the preview service uses Node's built-in SQLite. The PostgreSQL preparation tools use `pg`; database tests use PGlite. The API/form definitions are separated from the preview UI so the official app can replace the presentation and persistence layers. Confirm its stack before selecting shared UI packages.
+
+## Production storage preparation (15 October 2026)
+
+The [storage migration guide](docs/storage-migration.md) covers the new versioned PostgreSQL document schema and verified SQLite export package. Run `npm run pg:plan` to inspect migration checksums without a database connection. Export and verification preserve existing encryption, file versions and all legacy records, and report unresolved ownership or missing source contents.
+
+These tools prepare a migration; they do not connect the running app to PostgreSQL or cloud storage. Verified login, the runtime adapters, private bucket/scanning integration and a tested staging import remain outstanding. The production startup guard remains enabled.
 
 Read [the integration contract](docs/integration.md), [source review notes](docs/source-review.md) and [next milestones](docs/roadmap.md).
 
