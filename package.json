@@ -11,10 +11,20 @@
     "start": "node --env-file-if-exists=.env src/server.js",
     "dev": "node --env-file-if-exists=.env --watch src/server.js",
     "test": "node --test",
-    "check": "node --check src/server.js && node --check src/explorer.js && node --check src/store.js && node --check src/forms.js && node --check public/app.js && node --check src/zip.js && node --check src/ingest.js && node --check scripts/database.js && node --check src/hub.js && node --check src/classification.js && node --check src/blob-crypto.js && node --check public/hub-ui.js",
+    "check": "node --check src/server.js && node --check src/explorer.js && node --check src/store.js && node --check src/forms.js && node --check public/app.js && node --check src/zip.js && node --check src/ingest.js && node --check scripts/database.js && node --check src/hub.js && node --check src/classification.js && node --check src/blob-crypto.js && node --check public/hub-ui.js && node --check src/migration-export.js && node --check src/postgres-migrations.js && node --check scripts/migration-export.js && node --check scripts/postgres.js",
     "import:documents": "python scripts/import_documents.py",
     "db:init": "node --env-file-if-exists=.env scripts/database.js init",
     "db:status": "node --env-file-if-exists=.env scripts/database.js status",
-    "db:restore": "node --env-file-if-exists=.env scripts/database.js restore"
+    "db:restore": "node --env-file-if-exists=.env scripts/database.js restore",
+    "pg:plan": "node scripts/postgres.js plan",
+    "pg:migrate": "node --env-file-if-exists=.env scripts/postgres.js migrate",
+    "migration:export": "node --env-file-if-exists=.env scripts/migration-export.js export",
+    "migration:verify": "node --env-file-if-exists=.env scripts/migration-export.js verify"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10"
   }
 }

@@ -8,3 +8,7 @@ node_modules/
 *.sqlite*
 *.db*
 coverage/
+*.partial-*/
+**/manifest.json
+**/records.json
+*.bin

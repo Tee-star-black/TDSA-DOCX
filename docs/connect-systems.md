@@ -49,6 +49,8 @@ Request configuration names and architecture details. Supply passwords, keys and
 
 ## 2. Database and file storage
 
+**15 October 2026 update:** the [storage migration foundation](storage-migration.md) now supplies a versioned PostgreSQL document schema, transactional migration runner, and verified export of the existing SQLite workspace. Runtime adapters, a destination importer and private object storage are still to implement; setting a connection string does not switch the running app.
+
 **The hub does not have to use the same database as the clinician/patient app.** Proposed default: a dedicated `tdsa_documents` database on an approved Cloud SQL PostgreSQL instance, plus private object storage for file contents. A shared instance can hold separate databases, but capacity, service identities, access and backup requirements must be reviewed. A separate instance is also possible when operational isolation is required. Do not assume the blog CMS or ECG instance is the correct target.
 
 This repository currently uses Node SQLite and database blobs. Setting `DATABASE_URL` alone will not migrate it: a PostgreSQL repository implementation and private object-storage adapter still need to replace the SQLite operations in `store.js`, `explorer.js`, `hub.js`, `ingest.js` and the backup routes.
