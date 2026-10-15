@@ -10,5 +10,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - run: npm ci
       - run: npm run check
       - run: npm test
+      - name: Build production container
+        run: docker build -t tdsa-docx:check .
+      - name: Check packaged runtime modules
+        run: >-
+          docker run --rm --entrypoint node tdsa-docx:check --input-type=module
+          -e "await import('./src/runtime/server.js'); await import('./src/runtime/storage.js'); await import('./src/runtime/identity.js');"
