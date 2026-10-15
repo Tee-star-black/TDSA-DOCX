@@ -1,13 +1,28 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
-import {migratePostgres, readMigrations} from '../src/postgres-migrations.js';
+import {migratePostgres as applyMigrations, readMigrations as allMigrations} from '../src/postgres-migrations.js';
+// These retain coverage of migration 001's original schema. Runtime tests below
+// exercise the complete migration chain and the replacement section policies.
+const readMigrations=()=>allMigrations().slice(0,1);
+const migratePostgres=(db,migrations=readMigrations())=>applyMigrations(db,migrations);
 
 const folder = '11111111-1111-4111-8111-111111111111';
 const file = '22222222-2222-4222-8222-222222222222';
 const object = '33333333-3333-4333-8333-333333333333';
 const version = '44444444-4444-4444-8444-444444444444';
 const sha = 'a'.repeat(64);
+
+test('section migration refuses populated foundation without deleting existing records', async () => {
+  const db = new PGlite();
+  try {
+    await migratePostgres(db); await seed(db);
+    await assert.rejects(applyMigrations(db,allMigrations()),/Section ownership must be mapped/);
+    assert.equal((await db.query('SELECT * FROM document_hub.files')).rows.length,1);
+    assert.equal((await db.query('SELECT * FROM public.tdsa_schema_migrations')).rows.length,1);
+    assert.equal((await db.query("SELECT to_regnamespace('hub_identity') AS id")).rows[0].id,null);
+  } finally { await db.close(); }
+});
 
 async function seed(db) {
   await db.exec(`INSERT INTO document_hub.organisations VALUES ('org-a','A'),('org-b','B');

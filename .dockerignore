@@ -1,0 +1,12 @@
+**
+!Dockerfile
+!package.json
+!package-lock.json
+!src/
+!src/runtime/
+!src/runtime/**
+!src/classification.js
+!src/zip.js
+!src/errors.js
+!public-hub/
+!public-hub/**
