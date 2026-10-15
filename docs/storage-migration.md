@@ -1,5 +1,7 @@
 # Production storage preparation
 
+This is the historical first milestone. The [production runtime guide](production-runtime.md) describes the new Compliance/HR runtime and migration 002. Export verification still does not import legacy records into production.
+
 15 October 2026 · First storage milestone · No live deployment
 
 ## Delivered

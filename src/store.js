@@ -5,7 +5,8 @@ import {dirname} from 'node:path';
 import {validateSubmission} from './forms.js';
 import {blobCrypto} from './blob-crypto.js';
 
-export class AppError extends Error {constructor(status,message,errors={}){super(message);this.status=status;this.errors=errors;}}
+import {AppError} from './errors.js';
+export {AppError} from './errors.js';
 export function openStore(filename, cataloguePath, {encryptionKey=process.env.TDSA_BLOB_KEY_B64}={}) {
   const crypto=blobCrypto(encryptionKey);
   if(filename!==':memory:') mkdirSync(dirname(filename),{recursive:true});
