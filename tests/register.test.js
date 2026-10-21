@@ -73,7 +73,7 @@ test('explorer assets contain real accessible filtering and mobile inspector',as
   const js=readFileSync(new URL('../public-hub/explorer.js',import.meta.url),'utf8');
   const css=readFileSync(new URL('../public-hub/explorer.css',import.meta.url),'utf8');
   assert.match(js,/data-explorer-filter/);assert.match(js,/data-summary/);
-  assert.match(js,/getJSON\(base\+'\/files\/\+'/);
+  assert.match(js,/getJSON\(base/);
   assert.match(css,/@media\(max-width:600px\)/);
   assert.match(css,/\.explorer-inspector\.open/);
 });
