@@ -228,3 +228,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
  .explorer-date-grid{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){.sidebar,.explorer-inspector{transition:none}}
+/* Avoid duplicated legacy summary cards and upload actions. */
+.main>.stats[hidden]{display:none!important}
+.main>.heading>.primary{display:none!important}

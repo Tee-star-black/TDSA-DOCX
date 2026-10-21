@@ -37,8 +37,8 @@ export function documentService(pool,storage,scanner){
         const {rows:folders}=await c.query('SELECT id,parent_id,name FROM document_hub.folders ORDER BY lower(name)');
         const {rows:files}=await c.query(`SELECT f.*,v.version,v.filename,v.mime,v.created_at AS updated_at,
           first_version.author_id AS original_author_id,
-          o.size_bytes AS size,m.category,m.document_type,m.tags,m.review_status,m.review_date,
-          m.expires_on,m.owner_principal_id,owner.display_name AS owner_name,
+          o.size_bytes AS size,m.category,m.document_type,m.tags,m.review_status,m.review_date::text AS review_date,
+          m.expires_on::text AS expires_on,m.owner_principal_id,owner.display_name AS owner_name,
           latest_review.status AS latest_approval_status,latest_review.submitted_by AS latest_submitted_by,
           publication.version AS published_version
           FROM document_hub.files f
@@ -96,7 +96,7 @@ export function documentService(pool,storage,scanner){
     },
     detail(principal,scope,fileId){return run(principal,scope,async(c,a)=>{
       const f=await getFile(c,fileId);const {rows:versions}=await c.query('SELECT id,version,filename,mime,author_id,created_at FROM document_hub.file_versions WHERE file_id=$1 ORDER BY version DESC',[f.id]);
-      const {rows:[metadata]}=await c.query(`SELECT m.category,m.document_type,m.tags,m.review_status,m.review_date,m.expires_on,m.owner_principal_id,owner.display_name AS owner_name,m.revision FROM document_hub.file_metadata m LEFT JOIN hub_identity.principals owner ON owner.id=m.owner_principal_id WHERE m.file_id=$1`,[f.id]);
+      const {rows:[metadata]}=await c.query(`SELECT m.category,m.document_type,m.tags,m.review_status,m.review_date::text AS review_date,m.expires_on::text AS expires_on,m.owner_principal_id,owner.display_name AS owner_name,m.revision FROM document_hub.file_metadata m LEFT JOIN hub_identity.principals owner ON owner.id=m.owner_principal_id WHERE m.file_id=$1`,[f.id]);
       let editable=true;try{await canEdit(c,a,f);}catch(e){if(e.status!==403)throw e;editable=false;}
       return {...f,versions,metadata,editable,canManagePrivacy:a.role==='manager'&&editable};
     });},

@@ -13,6 +13,12 @@ function short(value,description='Text',limit=150){
   if(typeof value!=='string'||!value.trim()||value.trim().length>limit||/[\x00-\x1f]/.test(value))throw new HttpError(422,`${description} must contain 1-${limit} characters`);
   return value.trim();
 }
+function isoDate(value){
+  if(value===null||value===undefined||value==='')return null;
+  if(typeof value==='string'&&/^20\d{2}-\d{2}-\d{2}$/.test(value))return value;
+  const date=new Date(value);
+  return Number.isFinite(date.getTime())?date.toISOString().slice(0,10):null;
+}
 function optionalDate(value){
   if(value===null||value===undefined||value==='')return null;
   if(typeof value!=='string'||!/^20\d{2}-\d{2}-\d{2}$/.test(value)||Number.isNaN(Date.parse(`${value}T00:00:00Z`))||new Date(`${value}T00:00:00Z`).toISOString().slice(0,10)!==value)throw new HttpError(422,'Choose a valid date in YYYY-MM-DD format');
@@ -60,8 +66,8 @@ export function registerService(pool){
       const owner=await member(c,a,nextOwner);
       const cat=category(input.category??(existing.category==='general'?'General':existing.category)??'General',a.section);
       const type=short(input.documentType??existing.document_type??'Reference','Document type',80);
-      const review=optionalDate(input.reviewDate===undefined?existing.review_date:input.reviewDate);
-      const expiry=optionalDate(input.expiresOn===undefined?existing.expires_on:input.expiresOn);
+      const review=optionalDate(input.reviewDate===undefined?isoDate(existing.review_date):input.reviewDate);
+      const expiry=optionalDate(input.expiresOn===undefined?isoDate(existing.expires_on):input.expiresOn);
       const tags=input.tags===undefined?existing.tags:input.tags;
       if(!Array.isArray(tags)||tags.length>12||tags.some(v=>typeof v!=='string'||v.trim().length<1||v.length>40||/[\x00-\x1f]/.test(v)))throw new HttpError(422,'Use up to 12 short document tags');
       await c.query(`UPDATE document_hub.file_metadata SET category=$1,document_type=$2,review_date=$3,
@@ -73,20 +79,30 @@ export function registerService(pool){
       return {id:file.id,revision:file.revision+1};
     });},
     requirements(principal,scope){return run(principal,scope,async(c,a)=>{
-      const {rows}=await c.query(`SELECT r.id,r.title,r.category,r.due_on,r.assigned_principal_id,
+      const {rows}=await c.query(`SELECT r.id,r.title,r.category,r.due_on::text AS due_on,r.assigned_principal_id,
         p.display_name AS assigned_name,r.fulfilled_file_id,f.title AS file_title,
         f.archived AS file_archived,f.requires_approval,
-        m.expires_on AS linked_expiry,
-        EXISTS(SELECT 1 FROM document_hub.file_publications pub WHERE pub.file_id=f.id) AS has_publication
+        m.expires_on::text AS linked_expiry,
+        EXISTS(SELECT 1 FROM document_hub.file_publications pub WHERE pub.file_id=f.id) AS has_publication,
+        CASE WHEN r.assigned_principal_id IS NULL THEN true
+          WHEN assignee.active IS NOT TRUE OR subject.active IS NOT TRUE THEN false
+          WHEN f.privacy='section' THEN true
+          WHEN f.privacy='team' THEN assignee.role IN ('editor','manager')
+          WHEN f.privacy='personal' THEN f.subject_id=r.assigned_principal_id
+          WHEN f.privacy='restricted' THEN EXISTS(SELECT 1 FROM document_hub.file_grants g WHERE g.file_id=f.id AND g.principal_id=r.assigned_principal_id)
+          ELSE false END AS assignee_can_read
         FROM document_hub.document_requirements r
         LEFT JOIN hub_identity.principals p ON p.id=r.assigned_principal_id
+        LEFT JOIN hub_identity.principals subject ON subject.id=r.assigned_principal_id
+        LEFT JOIN hub_identity.memberships assignee ON assignee.principal_id=r.assigned_principal_id
+          AND assignee.organisation_id=r.organisation_id AND assignee.facility_id=r.facility_id AND assignee.section=r.section
         LEFT JOIN document_hub.files f ON f.id=r.fulfilled_file_id
         LEFT JOIN document_hub.file_metadata m ON m.file_id=f.id
         ORDER BY r.due_on NULLS LAST,lower(r.title) LIMIT 250`);
       const today=new Date().toISOString().slice(0,10);
       const result=rows.map(r=>({
         ...r,
-        missing:!r.fulfilled_file_id||!r.file_title||r.file_archived||(r.requires_approval&&!r.has_publication)||(r.linked_expiry!==null && r.linked_expiry!==undefined && String(r.linked_expiry).slice(0,10)<today),
+        missing:!r.fulfilled_file_id||!r.file_title||r.file_archived||!r.assignee_can_read||(r.requires_approval&&!r.has_publication)||(r.linked_expiry!==null && r.linked_expiry!==undefined && String(r.linked_expiry).slice(0,10)<today),
       }));
       return {configured:result.length>0,missing:result.filter(x=>x.missing).length,requirements:result,role:a.role};
     });},

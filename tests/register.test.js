@@ -36,6 +36,8 @@ test('requirements are private, linked to accessible same-section files, and nev
     assert.equal((await reg.requirements(profiles.employee.id,scope('hr'))).requirements.length,1);
     assert.equal((await reg.requirements(profiles.colleague.id,scope('hr'))).requirements.length,0);
     await assert.rejects(reg.createRequirement(profiles.employee.id,scope('hr'),{title:'Not permitted'}),forbidden(403));
+    const inaccessible=await documents.upload(profiles.hr.id,scope('hr'),asText('Restricted to editors'));
+    await assert.rejects(reg.linkRequirement(profiles.hr.id,scope('hr'),requirement.id,{fileId:inaccessible.id}),forbidden(422));
     const file=await documents.upload(profiles.hr.id,scope('hr'),{...asText('Synthetic required doc'),privacy:'section'});
     await reg.linkRequirement(profiles.hr.id,scope('hr'),requirement.id,{fileId:file.id});
     assert.equal((await reg.requirements(profiles.hr.id,scope('hr'))).missing,0);
