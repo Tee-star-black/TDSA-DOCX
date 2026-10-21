@@ -7,3 +7,16 @@ a.primary{display:inline-block;padding:11px 15px;border-radius:8px;text-decorati
 .toolbar>select{width:auto;flex-shrink:0}.search input{flex:1;min-width:0}
 
 .toolbar{flex-wrap:wrap}.search{flex:1 1 260px}@media(max-width:650px){.search{flex:0 0 100%}}
+
+/* Controlled document publication */
+.controlled-approval{border-top:1px solid var(--line);padding-top:20px;margin-top:24px}
+.controlled-approval .approval-state{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.controlled-approval .approval-buttons{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.controlled-approval .approval-buttons button{text-align:left}
+.controlled-approval .approval-history{padding-left:20px;font-size:12px}
+.controlled-approval .approval-history li{margin:9px 0}
+.controlled-approval .approval-history small{display:block}
+.controlled-approval details summary{cursor:pointer;font-size:12px;margin:14px 0}
+.control-check{display:flex;gap:10px;align-items:flex-start;line-height:1.5}
+.control-check input[type=checkbox]{width:auto;margin-top:5px;flex-shrink:0}
+dialog textarea{font:inherit;width:100%;resize:vertical;min-height:96px;border:1px solid #bdcfd2;border-radius:7px;padding:10px}

@@ -84,3 +84,7 @@ Before real documents are allowed:
 - Test expected concurrent load, database connection limits and the deployment/rollback procedure. Upload retry idempotency is not implemented: a retry of a new-file upload can create another document. Concurrent version writes use revisions, but a losing upload may leave a private orphan object.
 
 These are deployment acceptance gates, not checks already performed against your GCP account. Clinical forms, patient feedback, AI/OCR, document approvals, scheduled reviews and the future HR-system integration are not served by this new runtime.
+
+## Controlled document publication (migration 003)
+
+The approval and publication lifecycle is described in [review-publication.md](review-publication.md). Apply `003_review_publication.sql` and rerun the **idempotent** `scripts/runtime-grants.sql` as the migration administrator before restarting the restricted runtime. This enforces independent manager review and explicitly pins published immutable versions. Existing files remain uncontrolled until authorised managers opt into governance; audit and classify legacy policies before making them controlled. Published versions must be verified with real Cloud SQL RLS and GCS generation references in staging before staff receive access.

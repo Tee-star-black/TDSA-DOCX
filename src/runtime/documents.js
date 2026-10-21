@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {scoped,HttpError,requireEditor,requireManager,audit,digest} from './database.js';
 import {docxText} from '../classification.js';
+import {approvalService} from './approvals.js';
 
 export const privacyLevels=['section','team','personal','restricted'];
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,6 +28,7 @@ export function uploadBytes(input){
 export function documentService(pool,storage,scanner){
   const run=(principal,scope,work)=>scoped(pool,principal,scope,work);
   return {
+    ...approvalService(pool),
     list(principal,scope,query=''){
       if(query.length>150)throw new HttpError(422,'Search is too long');
       return run(principal,scope,async(c,a)=>{
@@ -48,11 +50,12 @@ export function documentService(pool,storage,scanner){
     async upload(principal,scope,input,fileId=null){
       const data=uploadBytes(input);
       const title=name(input.title??data.filename);
+      if(!fileId&&input.requiresApproval!==undefined&&typeof input.requiresApproval!=='boolean')throw new HttpError(422,'Invalid approval setting');
       if(!fileId)validatePrivacy({privacy:input.privacy??'team',subjectId:input.subjectId},scope.section);
       const preflight=async(c,a)=>{
         requireEditor(a);
         if(fileId){const f=await getFile(c,fileId,true);await canEdit(c,a,f);if(f.archived)throw new HttpError(409,'Restore the document before adding a version');if(f.revision!==revision(input.revision))throw new HttpError(409,'Document changed. Refresh before uploading.');}
-        else {if(['personal','restricted','section'].includes(input.privacy))requireManager(a);await folder(c,input.folderId??null);await validSubject(c,a,input.subjectId);}
+        else {if(['personal','restricted','section'].includes(input.privacy))requireManager(a);if(input.requiresApproval){requireManager(a);if(!['section','team'].includes(input.privacy??'team'))throw new HttpError(422,'Only section or team documents can require approval');}await folder(c,input.folderId??null);await validSubject(c,a,input.subjectId);}
       };
       await run(principal,scope,preflight);
       await scanner.scan(data.bytes,data.hash);
@@ -62,12 +65,13 @@ export function documentService(pool,storage,scanner){
       return run(principal,scope,async(c,a)=>{
         await preflight(c,a);const fid=fileId??randomUUID(),oid=randomUUID(),vid=randomUUID();
         if(!fileId){
-          await c.query('INSERT INTO document_hub.files(organisation_id,facility_id,section,id,folder_id,title,privacy,subject_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[...scopeValues(a),fid,input.folderId??null,title,input.privacy??'team',input.subjectId??null]);
+          await c.query('INSERT INTO document_hub.files(organisation_id,facility_id,section,id,folder_id,title,privacy,subject_id,requires_approval) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[...scopeValues(a),fid,input.folderId??null,title,input.privacy??'team',input.subjectId??null,input.requiresApproval===true]);
           await c.query("INSERT INTO document_hub.file_grants(organisation_id,facility_id,section,file_id,principal_id,capability) VALUES($1,$2,$3,$4,$5,'manage')",[...scopeValues(a),fid,principal]);
         }
         await c.query(`INSERT INTO document_hub.objects(organisation_id,facility_id,section,id,sha256,size_bytes,storage_key,storage_generation,scan_status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'clean')`,[...scopeValues(a),oid,data.hash,data.bytes.length,stored.key,stored.generation]);
         const {rows:[count]}=await c.query('SELECT COALESCE(MAX(version),0)+1 AS n FROM document_hub.file_versions WHERE file_id=$1',[fid]);
         await c.query('INSERT INTO document_hub.file_versions(organisation_id,facility_id,section,id,file_id,version,object_id,filename,mime,author_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[...scopeValues(a),vid,fid,count.n,oid,data.filename,data.mime,principal]);
+        if(fileId)await c.query("UPDATE document_hub.file_approvals SET status='superseded' WHERE file_id=$1 AND status='pending'",[fid]);
         await c.query(`INSERT INTO document_hub.file_metadata(organisation_id,facility_id,section,file_id) VALUES($1,$2,$3,$4)
           ON CONFLICT(organisation_id,facility_id,file_id) DO UPDATE SET review_status='pending',reviewed_by=NULL,reviewed_at=NULL,revision=document_hub.file_metadata.revision+1`,[...scopeValues(a),fid]);
         if(fileId)await c.query('UPDATE document_hub.files SET revision=revision+1 WHERE id=$1',[fid]);
@@ -90,7 +94,7 @@ export function documentService(pool,storage,scanner){
     });},
     privacy(principal,scope,fileId,input){return run(principal,scope,async(c,a)=>{
       requireManager(a);const f=await getFile(c,fileId,true);await canEdit(c,a,f);if(f.revision!==revision(input.revision))throw new HttpError(409,'Document changed. Refresh before saving.');
-      validatePrivacy(input,a.section);await validSubject(c,a,input.subjectId);
+      validatePrivacy(input,a.section);if(f.requires_approval&&!['section','team'].includes(input.privacy))throw new HttpError(422,'Controlled policies cannot be converted into personal or restricted records');await validSubject(c,a,input.subjectId);
       // A fresh privacy boundary must not revive previously assigned access.
       // Keep the acting manager's grant until after the update so restricted
       // row visibility remains available throughout this transaction.
