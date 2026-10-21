@@ -21,7 +21,7 @@ export function createHubServer({service,sessions,login,origin,preview=false,pre
       if(req.headers.origin&&req.headers.origin!==expected)throw new HttpError(403,'Cross-origin request blocked');
       if(req.headers['sec-fetch-site']==='cross-site'&&!['/','/auth/callback','/auth/login'].includes(path))throw new HttpError(403,'Cross-site request blocked');
       if(!['GET','POST','PUT'].includes(req.method))throw new HttpError(405,'Method not allowed');
-      const asset={'/':'index.html','/hub.js':'hub.js','/reviews.js':'reviews.js','/hub.css':'hub.css','/experience.css':'experience.css','/experience.js':'experience.js','/explorer.css':'explorer.css','/explorer.js':'explorer.js'}[path];
+      const asset={'/':'index.html','/hub.js':'hub.js','/reviews.js':'reviews.js','/hub.css':'hub.css','/experience.css':'experience.css','/experience.js':'experience.js','/explorer.css':'explorer.css','/explorer.js':'explorer.js','/modern.css':'modern.css','/modern.js':'modern.js'}[path];
       if(asset&&req.method==='GET')return send(res,200,readFileSync(join(assets,asset)),asset.endsWith('.js')?'text/javascript; charset=utf-8':asset.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8');
       if(path==='/healthz'&&req.method==='GET')return send(res,200,{status:'ok'});
       if(path==='/auth/status'&&req.method==='GET')return send(res,200,{preview,loginAvailable:Boolean(login),storage:preview?'local-preview':'gcp'});
