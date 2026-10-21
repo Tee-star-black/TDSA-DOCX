@@ -35,7 +35,7 @@ export function documentService(pool,storage,scanner){
       if(query.length>150)throw new HttpError(422,'Search is too long');
       return run(principal,scope,async(c,a)=>{
         const {rows:folders}=await c.query('SELECT id,parent_id,name FROM document_hub.folders ORDER BY lower(name)');
-        const {rows:files}=await c.query(`SELECT f.*,v.version,v.filename,v.mime,v.created_at AS updated_at,
+        const {rows:files}=await c.query(`SELECT f.*,v.version,v.filename,v.mime,v.created_at AS updated_at,v.author_id AS latest_author_id,
           first_version.author_id AS original_author_id,
           o.size_bytes AS size,m.category,m.document_type,m.tags,m.review_status,m.review_date::text AS review_date,
           m.expires_on::text AS expires_on,m.owner_principal_id,owner.display_name AS owner_name,

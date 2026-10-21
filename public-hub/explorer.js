@@ -33,12 +33,13 @@ function statusFor(row){
   if(row.dataset.approval==='rejected')return {text:'Changes requested',tone:'red'};
   if(row.dataset.expiry && parseDate(row.dataset.expiry)<new Date(new Date().toISOString().slice(0,10)+'T00:00:00Z'))return {text:'Expired',tone:'red'};
   if(withinThirty(row.dataset.expiry))return {text:'Expiring soon',tone:'amber'};
+  if(row.dataset.approval==='approved'&&!row.dataset.published)return {text:'Ready to publish',tone:'blue'};
   if(row.dataset.published)return {text:'Approved',tone:'green'};
   if(row.dataset.controlled==='true')return {text:'Draft',tone:'neutral'};
   if(withinThirty(row.dataset.review))return {text:'Review due',tone:'amber'};
   return {text:'Active',tone:'muted'};
 }
-function actionable(row){return row.dataset.approval==='pending'&&row.dataset.author!==pref.principal&&row.dataset.submitter!==pref.principal&&document.querySelector('.layout')?.dataset.role==='manager';}
+function actionable(row){return row.dataset.approval==='pending'&&row.dataset.latestAuthor!==pref.principal&&row.dataset.submitter!==pref.principal&&document.querySelector('.layout')?.dataset.role==='manager';}
 function getPanel(){return app?.querySelector('#document-panel');}
 function getScope(){return app?.querySelector('.layout')?.dataset.apiBase||'';}
 function rowCollection(panel=getPanel()){return [...(panel?.querySelectorAll('tbody tr')||[])].filter(x=>x.querySelector('.file-name'));}
@@ -142,7 +143,7 @@ function addSummary(main){
   if(main.querySelector('.explorer-dashboard'))return;
   const old=main.querySelector('.stats');if(old)old.hidden=true;
   const strip=createElement('section','explorer-dashboard');strip.setAttribute('aria-label','Document actions requiring attention');
-  strip.innerHTML=`<button type="button" data-summary="approvals"><span>AWAITING MY APPROVAL</span><strong data-count-approvals>0</strong><small>Open review queue ${ico('arrow',15)}</small></button><button type="button" data-summary="expiring"><span>EXPIRING SOON</span><strong data-count-expiring>0</strong><small>Due within 30 days ${ico('arrow',15)}</small></button><button type="button" data-summary="missing"><span>MISSING REQUIRED DOCUMENTS</span><strong data-count-missing>—</strong><small data-required-hint>Requirement register not configured</small></button>`;
+  strip.innerHTML=`<button type="button" data-summary="approvals"><span>AWAITING MY APPROVAL</span><strong data-count-approvals>0</strong><small>Open review queue ${ico('arrow',15)}</small></button><button type="button" data-summary="expiring"><span>EXPIRING SOON</span><strong data-count-expiring>0</strong><small>Expired or due in 30 days ${ico('arrow',15)}</small></button><button type="button" data-summary="missing"><span>MISSING REQUIRED DOCUMENTS</span><strong data-count-missing>—</strong><small data-required-hint>Requirement register not configured</small></button>`;
   const panel=main.querySelector('#document-panel');if(panel)main.insertBefore(strip,panel);else main.append(strip);
   strip.querySelectorAll('[data-summary]').forEach(b=>b.onclick=()=>setFilter(b.dataset.summary));
 }

@@ -231,3 +231,5 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
 /* Avoid duplicated legacy summary cards and upload actions. */
 .main>.stats[hidden]{display:none!important}
 .main>.heading>.primary{display:none!important}
+
+.document-status.blue{background:#eaf2f9;color:#23608d}
