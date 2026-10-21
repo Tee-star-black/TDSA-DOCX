@@ -56,3 +56,7 @@ Tests include PostgreSQL section/privacy enforcement, HTTP auth and CSRF, member
 The future HR integration will map verified external identities to explicit section membership and employee ownership. It is not connected yet. There is no cross-department sharing, OCR, automated retention, employee acknowledgement/signature workflow or production import in this release.
 
 The [legacy medical pilot](docs/legacy-pilot.md) is retained for migration reference and regression tests. Run it only with `npm run legacy:preview`; its SQLite data and patient/form routes are separate from the new hub. `db:*` and `migration:*` scripts are legacy recovery/export tools, not the new runtime. See [the storage migration guide](docs/storage-migration.md) before exporting old records. Never commit real documents, records, `.data`, exports, credentials or identity mappings to this public repository.
+
+## Updated Document Hub interface
+
+The redesigned experience lives on `feat/document-hub-experience` and builds on the controlled-approval branch. It introduces a sharp, consistent document explorer, accessible list/grid views, sorting, clearer folder navigation, and a refined document detail/approval layout. This is a presentation-layer change: auth, storage, privacy and publication policies are unchanged. See [the experience design guide](docs/experience-redesign.md).
