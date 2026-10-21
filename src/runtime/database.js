@@ -20,8 +20,8 @@ export async function assertRuntimeDatabase(pool) {
     const {rows:[role]}=await c.query('SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user');
     const {rows:[owner]}=await c.query("SELECT EXISTS(SELECT 1 FROM pg_tables WHERE schemaname IN ('document_hub','hub_identity') AND tableowner=current_user) AS owns_tables");
     if(role.rolsuper||role.rolbypassrls||owner.owns_tables)throw Error('Use a non-owner PostgreSQL runtime role without BYPASSRLS');
-    const {rows}=await c.query("SELECT name FROM public.tdsa_schema_migrations WHERE name='003_review_publication.sql'");
-    if(!rows.length)throw Error('Apply the section/identity migrations with the separate migration identity first');
+    const {rows}=await c.query("SELECT name FROM public.tdsa_schema_migrations WHERE name='004_document_register.sql'");
+    if(!rows.length)throw Error('Apply all document register migrations with the separate migration identity first');
   } finally{c.release();}
 }
 export async function scoped(pool,principalId,scope,work) {

@@ -45,7 +45,7 @@ function sortRows(panel) {
   rows.sort((a,b) => {
     const read = (row,n) => row.querySelector(`td:nth-child(${n})`)?.textContent?.trim() || '';
     if (viewPreference.sort === 'updated') {
-      const dateA=Date.parse(read(a,4)),dateB=Date.parse(read(b,4));
+      const dateA=Date.parse(a.dataset.updated||read(a,7)),dateB=Date.parse(b.dataset.updated||read(b,7));
       return (Number.isFinite(dateB)?dateB:0)-(Number.isFinite(dateA)?dateA:0) || collate(read(a,1), read(b,1));
     }
     if (viewPreference.sort === 'type') {
