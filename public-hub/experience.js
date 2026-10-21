@@ -135,7 +135,7 @@ if(hubRoot){
   // Existing hub.js replaces #app after most user actions. Reattach only the
   // presentation controls when that happens; never intercept backend requests.
   const observer=new MutationObserver(()=>enhance());
-  observer.observe(hubRoot,{childList:true,subtree:true});
+  observer.observe(hubRoot,{childList:true});
   enhance();
   document.addEventListener('keydown', event=>{
     const target=event.target;
