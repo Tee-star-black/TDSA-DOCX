@@ -22,7 +22,7 @@ const icon = {
 };
 function ico(name,size=18){return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${icon[name]||icon.file}</svg>`;}
 const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const pref={filter:'all',expanded:new Set(),selected:null,openFolders:false,scope:'',principal:null,register:null,loading:false,token:0,contextEpoch:0,allowOpen:false};
+const pref={filter:'all',folder:null,folderParents:new Map(),expanded:new Set(),selected:null,openFolders:false,scope:'',principal:null,register:null,loading:false,token:0,contextEpoch:0,allowOpen:false};
 const DATE_WINDOW=30*86400000;
 function parseDate(value){if(!value)return null;const date=new Date(String(value).slice(0,10)+'T00:00:00Z');return Number.isNaN(+date)?null:date;}
 function withinThirty(value){const t=parseDate(value);if(!t)return false;const today=new Date();today.setUTCHours(0,0,0,0);return +t<=+today+DATE_WINDOW;}
@@ -45,7 +45,20 @@ function getScope(){return app?.querySelector('.layout')?.dataset.apiBase||'';}
 function rowCollection(panel=getPanel()){return [...(panel?.querySelectorAll('tbody tr')||[])].filter(x=>x.querySelector('.file-name'));}
 function allRows(){return rowCollection();}
 function headingFor(filter){const names={all:'All documents',mine:'My documents',shared:'Shared with me',approvals:'Awaiting my approval',expiring:'Expiring soon',archive:'Archived documents',missing:'Missing required documents'};return names[filter]||filter.replace(/^category:/,'');}
+function inSelectedFolder(row){
+  if(!pref.folder)return true;
+  let current=row.dataset.folderId||'';
+  const seen=new Set();
+  // Selecting a parent folder includes files in descendant folders.
+  while(current&&!seen.has(current)){
+    if(current===pref.folder)return true;
+    seen.add(current);
+    current=pref.folderParents.get(current)||'';
+  }
+  return false;
+}
 function matching(row,filter){
+  if(!inSelectedFolder(row))return false;
   if(filter==='archive')return row.dataset.archived==='true';
   if(row.dataset.archived==='true')return false;
   if(filter==='all')return true;
@@ -94,6 +107,7 @@ function makeFolderTree(sidebar){
   const source=sidebar.querySelector('.folders');if(!source||source.dataset.nested==='true')return;
   source.dataset.nested='true';
   const buttons=[...source.querySelectorAll('button.folder-link')];
+  pref.folderParents=new Map(buttons.map(b=>[b.dataset.folder,b.dataset.parent||'']));
   if(buttons.length<2)return;
   const root=buttons.find(b=>b.dataset.folder==='');
   const byParent=new Map();
@@ -177,7 +191,8 @@ function applyFilter(){
   if(list)list.hidden=isMissing;
   const requirements=app.querySelector('#explorer-requirements');if(requirements)requirements.hidden=!isMissing;
   const shouldArchive=current==='archive';
-  const select=panel.querySelector('#archive');if(select&&select.value!==(shouldArchive?'archive':'active')){select.value=shouldArchive?'archive':'active';select.dispatchEvent(new Event('change',{bubbles:true}));return;}
+  const select=panel.querySelector('#archive');
+  if(select)select.value=shouldArchive?'archive':'active';
   const rows=rowCollection(panel);let visible=0;
   for(const row of rows){row.hidden=!matching(row,current);if(!row.hidden)visible++;}
   const heading=panel.querySelector('.panel-head h2');if(heading)heading.textContent=headingFor(current);
@@ -189,20 +204,25 @@ function applyFilter(){
   }
   app.querySelectorAll('[data-explorer-filter]').forEach(b=>b.setAttribute('aria-current',String(b.dataset.explorerFilter===current?'page':'false')));
   app.querySelectorAll('[data-category-filter]').forEach(b=>b.classList.toggle('active',current==='category:'+b.dataset.categoryFilter));
+  app.querySelectorAll('.folders [data-folder]').forEach(b=>b.classList.toggle('active',(b.dataset.folder||null)===pref.folder));
 }
 function setFilter(filter){
-  pref.filter=filter;closeInspector();toggleMobile(false);
-  if(filter==='archive'){const select=getPanel()?.querySelector('#archive');if(select){select.value='archive';select.dispatchEvent(new Event('change',{bubbles:true}));return;}}
-  else if(getPanel()?.querySelector('#archive')?.value==='archive'){const select=getPanel().querySelector('#archive');select.value='active';select.dispatchEvent(new Event('change',{bubbles:true}));return;}
+  pref.filter=filter;
+  if(pref.folder){pref.folder=null;document.dispatchEvent(new Event('tdsa:reset-folder'));}
+  closeInspector();toggleMobile(false);
   if(filter==='missing')showRequirements();else applyFilter();
-  const inspector=app.querySelector('#explorer-inspector');if(inspector){inspector.classList.remove('open');inspector.querySelector('.explorer-inspector-inner')?.remove();}
 }
-function closeInspector(){pref.selected=null;const panel=app.querySelector('#explorer-inspector');if(panel){panel.classList.remove('open');panel.querySelector('.explorer-inspector-inner')?.remove();}document.body.classList.remove('inspector-open');}
+function closeInspector(){pref.selected=null;++pref.token;const panel=app.querySelector('#explorer-inspector');if(panel){panel.classList.remove('open');panel.querySelector('.explorer-inspector-inner')?.remove();}document.body.classList.remove('inspector-open');}
 function fullDocument(id,action){
+  // Let the hub open its existing detail view and optional action in one awaited
+  // operation. MutationObserver-driven synthetic button clicks caused races.
+  const request=new CustomEvent('tdsa:open-full-document',{cancelable:true,detail:{id,action}});
+  if(!document.dispatchEvent(request))return;
+  // Compatibility with older preview clients that lack the integration hook.
   const target=[...app.querySelectorAll('.file-name')].find(b=>b.dataset.file===id);
   if(!target)return;
-  pref.allowOpen=true;target.click();pref.allowOpen=false;
-  if(action){const observer=new MutationObserver(()=>{const button=app.querySelector(action==='version'?'#version':action==='access'?'#privacy':null);if(button){observer.disconnect();button.click();}});observer.observe(app,{childList:true,subtree:true});setTimeout(()=>observer.disconnect(),4500);}
+  pref.allowOpen=true;
+  try{target.click();}finally{pref.allowOpen=false;}
 }
 async function openInspector(id,label){
   const inspector=app.querySelector('#explorer-inspector');if(!inspector)return;
@@ -289,13 +309,35 @@ async function linkRequirement(id){
   });
 }
 function enhance(){
-  const main=app?.querySelector('.main'),layout=app?.querySelector('.layout'),panel=getPanel();if(!main||!layout)return;
-  const scope=layout.dataset.apiBase;if(!scope)return;
-  if(scope!==pref.scope){pref.scope=scope;pref.filter='all';pref.selected=null;}
-  pref.principal=null;pref.register=null;const epoch=++pref.contextEpoch;
-  loadContext(epoch).then(()=>{if(epoch===pref.contextEpoch){updateCounts();applyFilter();}});loadRegister(scope,epoch);
-  if(!panel)return;
-  if(main.dataset.explorerReady==='true')return;
+  const main=app?.querySelector('.main'),layout=app?.querySelector('.layout'),panel=getPanel();
+  if(!main||!layout){
+    // Sign-out/sign-in can change the employee while keeping the same section.
+    // Never reuse cached identity or register data across sessions.
+    if(pref.scope){
+      pref.scope='';pref.principal=null;pref.register=null;pref.folder=null;
+      pref.folderParents.clear();pref.expanded.clear();pref.filter='all';
+      ++pref.contextEpoch;closeInspector();toggleMobile(false);
+    }
+    return;
+  }
+  const scope=layout.dataset.apiBase;
+  if(!scope)return;
+  const switchedScope=scope!==pref.scope;
+  const isNewScreen=main.dataset.explorerReady!=='true';
+  if(switchedScope){
+    pref.scope=scope;pref.filter='all';pref.folder=null;pref.selected=null;pref.expanded.clear();pref.folderParents.clear();
+    pref.principal=null;pref.register=null;
+    const epoch=++pref.contextEpoch;
+    loadContext(epoch).then(()=>{if(epoch===pref.contextEpoch){updateCounts();applyFilter();}});
+    loadRegister(scope,epoch);
+  }else if(isNewScreen&&panel){
+    // Keep the last known identity/register while a refreshed list loads.
+    // Re-fetch the register when the hub changes its data, not on every click.
+    const epoch=++pref.contextEpoch;
+    loadRegister(scope,epoch);
+  }
+  if(!panel){closeInspector();return;}
+  if(!isNewScreen)return;
   main.dataset.explorerReady='true';
   const side=layout.querySelector('.sidebar');if(side){makeNav(side);makeFolderTree(side);makeCategories(side);}
   addTopActions();addSummary(main);enrichTable(panel);addInspector(main);
@@ -305,6 +347,19 @@ function enhance(){
   if(pref.filter==='missing')showRequirements();
 }
 if(app){
+  window.__TDSA_EXPLORER_ENABLED__=true;
+  // The legacy hub owns the shell. Explorer navigation should update rows in
+  // place, rather than repeatedly replacing the whole application DOM.
+  document.addEventListener('tdsa:folder-changed',ev=>{
+    if(!getPanel())return;
+    ev.preventDefault();
+    pref.folder=ev.detail?.folderId||null;
+    pref.filter='all';closeInspector();toggleMobile(false);applyFilter();
+  });
+  document.addEventListener('tdsa:archive-changed',ev=>{
+    if(!getPanel())return;
+    ev.preventDefault();setFilter(ev.detail?.archived?'archive':'all');
+  });
   const observer=new MutationObserver(enhance);
   observer.observe(app,{childList:true});
   enhance();
