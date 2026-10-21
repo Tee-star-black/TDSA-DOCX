@@ -60,3 +60,14 @@ The [legacy medical pilot](docs/legacy-pilot.md) is retained for migration refer
 ## Updated Document Hub interface
 
 The redesigned experience lives on `feat/document-hub-experience` and builds on the controlled-approval branch. It introduces a sharp, consistent document explorer, accessible list/grid views, sorting, clearer folder navigation, and a refined document detail/approval layout. This is a presentation-layer change: auth, storage, privacy and publication policies are unchanged. See [the experience design guide](docs/experience-redesign.md).
+
+
+## Document-first Explorer 2.0 (review branch)
+
+The `feat/document-hub-explorer-workflows` branch adds a three-area file explorer: scoped folder/category navigation, a document list with status and owner, and an on-demand preview/details inspector. The header includes document search, upload and folder creation; on mobile navigation slides out and previews open full-screen.
+
+Document classification now stores a responsible owner, category, document type, review date and expiry date. Section managers can define and assign required documents and monitor missing or expired records through an audited document register. Independent review/publication and the earlier Compliance/HR access policies are retained.
+
+See [Explorer 2.0 implementation, limitations and API](docs/document-explorer-v2.md).
+
+**Not production deployment:** apply migration 004 and updated runtime grants with a controlled migration identity, then complete live Cloud SQL, GCS, scanner and OIDC acceptance before real staff records. Alerts currently open the review queue; automatic reminder delivery, AI OCR and MedCNX synchronization are not yet connected.

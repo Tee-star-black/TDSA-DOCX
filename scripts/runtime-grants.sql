@@ -11,3 +11,4 @@ GRANT SELECT,INSERT ON document_hub.file_versions,document_hub.objects,document_
 GRANT SELECT,INSERT,UPDATE ON document_hub.file_approvals TO tdsa_runtime;
 GRANT SELECT,INSERT ON document_hub.file_publications TO tdsa_runtime;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA document_hub TO tdsa_runtime;
+GRANT SELECT,INSERT,UPDATE ON document_hub.document_requirements TO tdsa_runtime;

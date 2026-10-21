@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {scoped,HttpError,requireEditor,requireManager,audit,digest} from './database.js';
 import {docxText} from '../classification.js';
 import {approvalService} from './approvals.js';
+import {registerService} from './register.js';
 
 export const privacyLevels=['section','team','personal','restricted'];
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,13 +30,28 @@ export function documentService(pool,storage,scanner){
   const run=(principal,scope,work)=>scoped(pool,principal,scope,work);
   return {
     ...approvalService(pool),
+    ...registerService(pool),
     list(principal,scope,query=''){
       if(query.length>150)throw new HttpError(422,'Search is too long');
       return run(principal,scope,async(c,a)=>{
         const {rows:folders}=await c.query('SELECT id,parent_id,name FROM document_hub.folders ORDER BY lower(name)');
-        const {rows:files}=await c.query(`SELECT f.*,v.version,v.filename,v.mime,v.created_at AS updated_at,o.size_bytes AS size,m.category,m.tags,m.review_status,m.review_date
-          FROM document_hub.files f JOIN LATERAL(SELECT * FROM document_hub.file_versions WHERE file_id=f.id ORDER BY version DESC LIMIT 1)v ON true
-          JOIN document_hub.objects o ON o.id=v.object_id LEFT JOIN document_hub.file_metadata m ON m.file_id=f.id
+        const {rows:files}=await c.query(`SELECT f.*,v.version,v.filename,v.mime,v.created_at AS updated_at,v.author_id AS latest_author_id,
+          first_version.author_id AS original_author_id,
+          o.size_bytes AS size,m.category,m.document_type,m.tags,m.review_status,m.review_date::text AS review_date,
+          m.expires_on::text AS expires_on,m.owner_principal_id,owner.display_name AS owner_name,
+          latest_review.status AS latest_approval_status,latest_review.submitted_by AS latest_submitted_by,
+          publication.version AS published_version
+          FROM document_hub.files f
+          JOIN LATERAL(SELECT * FROM document_hub.file_versions WHERE file_id=f.id ORDER BY version DESC LIMIT 1)v ON true
+          JOIN LATERAL(SELECT author_id FROM document_hub.file_versions WHERE file_id=f.id ORDER BY version ASC LIMIT 1)first_version ON true
+          JOIN document_hub.objects o ON o.id=v.object_id
+          LEFT JOIN document_hub.file_metadata m ON m.file_id=f.id
+          LEFT JOIN hub_identity.principals owner ON owner.id=m.owner_principal_id
+          LEFT JOIN LATERAL(SELECT status,submitted_by FROM document_hub.file_approvals
+             WHERE file_id=f.id AND version_id=v.id ORDER BY submitted_at DESC,id DESC LIMIT 1)latest_review ON true
+          LEFT JOIN LATERAL(SELECT version.version FROM document_hub.file_publications p
+             JOIN document_hub.file_versions version ON version.id=p.version_id
+             WHERE p.file_id=f.id ORDER BY p.id DESC LIMIT 1)publication ON true
           WHERE position(lower($1) in lower(f.title||' '||COALESCE(m.tags::text,'')))>0 ORDER BY lower(f.title)`,[query]);
         return {folders,files,role:a.role,section:a.section};
       });
@@ -80,7 +96,7 @@ export function documentService(pool,storage,scanner){
     },
     detail(principal,scope,fileId){return run(principal,scope,async(c,a)=>{
       const f=await getFile(c,fileId);const {rows:versions}=await c.query('SELECT id,version,filename,mime,author_id,created_at FROM document_hub.file_versions WHERE file_id=$1 ORDER BY version DESC',[f.id]);
-      const {rows:[metadata]}=await c.query('SELECT category,tags,review_status,review_date,revision FROM document_hub.file_metadata WHERE file_id=$1',[f.id]);
+      const {rows:[metadata]}=await c.query(`SELECT m.category,m.document_type,m.tags,m.review_status,m.review_date::text AS review_date,m.expires_on::text AS expires_on,m.owner_principal_id,owner.display_name AS owner_name,m.revision FROM document_hub.file_metadata m LEFT JOIN hub_identity.principals owner ON owner.id=m.owner_principal_id WHERE m.file_id=$1`,[f.id]);
       let editable=true;try{await canEdit(c,a,f);}catch(e){if(e.status!==403)throw e;editable=false;}
       return {...f,versions,metadata,editable,canManagePrivacy:a.role==='manager'&&editable};
     });},

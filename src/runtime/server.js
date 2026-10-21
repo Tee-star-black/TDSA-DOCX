@@ -21,7 +21,7 @@ export function createHubServer({service,sessions,login,origin,preview=false,pre
       if(req.headers.origin&&req.headers.origin!==expected)throw new HttpError(403,'Cross-origin request blocked');
       if(req.headers['sec-fetch-site']==='cross-site'&&!['/','/auth/callback','/auth/login'].includes(path))throw new HttpError(403,'Cross-site request blocked');
       if(!['GET','POST','PUT'].includes(req.method))throw new HttpError(405,'Method not allowed');
-      const asset={'/':'index.html','/hub.js':'hub.js','/reviews.js':'reviews.js','/hub.css':'hub.css','/experience.css':'experience.css','/experience.js':'experience.js'}[path];
+      const asset={'/':'index.html','/hub.js':'hub.js','/reviews.js':'reviews.js','/hub.css':'hub.css','/experience.css':'experience.css','/experience.js':'experience.js','/explorer.css':'explorer.css','/explorer.js':'explorer.js'}[path];
       if(asset&&req.method==='GET')return send(res,200,readFileSync(join(assets,asset)),asset.endsWith('.js')?'text/javascript; charset=utf-8':asset.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8');
       if(path==='/healthz'&&req.method==='GET')return send(res,200,{status:'ok'});
       if(path==='/auth/status'&&req.method==='GET')return send(res,200,{preview,loginAvailable:Boolean(login),storage:preview?'local-preview':'gcp'});
@@ -44,6 +44,12 @@ export function createHubServer({service,sessions,login,origin,preview=false,pre
       if(route==='files'&&req.method==='POST')return send(res,201,await service.upload(who,scope,input));
       if(route==='members'&&req.method==='GET')return send(res,200,await service.members(who,scope));
       if(route==='activity'&&req.method==='GET')return send(res,200,await service.activity(who,scope));
+      if(route==='register'&&req.method==='GET')return send(res,200,await service.requirements(who,scope));
+      if(route==='register/requirements'&&req.method==='POST')return send(res,201,await service.createRequirement(who,scope,input));
+      const required=route.match(/^register\/requirements\/([^/]+)$/);
+      if(required&&req.method==='PUT')return send(res,200,await service.linkRequirement(who,scope,required[1],input));
+      const classification=route.match(/^files\/([^/]+)\/classification$/);
+      if(classification&&req.method==='PUT')return send(res,200,await service.updateClassification(who,scope,classification[1],input));
       const folder=route.match(/^folders\/([^/]+)$/);
       if(folder&&req.method==='PUT')return send(res,200,await service.updateFolder(who,scope,folder[1],input));
       const controlled=route.match(/^files\/([^/]+)\/controlled$/);
