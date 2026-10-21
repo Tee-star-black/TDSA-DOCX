@@ -28,7 +28,7 @@ Section memberships are checked on every operation. PostgreSQL row policies also
 
 Readers cannot edit. Editors can create team documents and edit visible non-personal documents; restricted editing also requires a named manage grant. Managers can assign document privacy and named access only for documents they can manage. Changing privacy clears other named permissions. Membership administration remains a separate trusted operation.
 
-Uploads support PDF, DOCX and UTF-8 TXT up to 4 MiB. The hub provides previews, immutable version history, revision conflict checks, archive/restore, folders, title/tag search and access audit events. DOCX previews show text. Uploading a version resets metadata review to pending; a full approval workflow is not part of this milestone.
+Uploads support PDF, DOCX and UTF-8 TXT up to 4 MiB. The hub provides previews, immutable version history, revision conflict checks, archive/restore, folders, title/tag search and access audit events. DOCX previews show text. Uploading a version resets metadata review to pending. Controlled section and team documents now have **independent review, approve/reject and explicit immutable-version publication**. Staff readers see only published versions; new drafts do not replace published files. See [the workflow guide](docs/review-publication.md).
 
 ## Prepare GCP
 
@@ -53,6 +53,6 @@ npm test
 
 Tests include PostgreSQL section/privacy enforcement, HTTP auth and CSRF, membership revocation, stale versions, GCS generation/hash checks, scanner failure and OIDC signature/state/nonce checks. GCP and OIDC adapter tests use controlled test doubles; they do not certify a real deployment.
 
-The future HR integration will map verified external identities to explicit section membership and employee ownership. It is not connected yet. There is no cross-department sharing, OCR, automated retention, approval workflow or production import in this release.
+The future HR integration will map verified external identities to explicit section membership and employee ownership. It is not connected yet. There is no cross-department sharing, OCR, automated retention, employee acknowledgement/signature workflow or production import in this release.
 
 The [legacy medical pilot](docs/legacy-pilot.md) is retained for migration reference and regression tests. Run it only with `npm run legacy:preview`; its SQLite data and patient/form routes are separate from the new hub. `db:*` and `migration:*` scripts are legacy recovery/export tools, not the new runtime. See [the storage migration guide](docs/storage-migration.md) before exporting old records. Never commit real documents, records, `.data`, exports, credentials or identity mappings to this public repository.

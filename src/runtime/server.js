@@ -21,7 +21,7 @@ export function createHubServer({service,sessions,login,origin,preview=false,pre
       if(req.headers.origin&&req.headers.origin!==expected)throw new HttpError(403,'Cross-origin request blocked');
       if(req.headers['sec-fetch-site']==='cross-site'&&!['/','/auth/callback','/auth/login'].includes(path))throw new HttpError(403,'Cross-site request blocked');
       if(!['GET','POST','PUT'].includes(req.method))throw new HttpError(405,'Method not allowed');
-      const asset={'/':'index.html','/hub.js':'hub.js','/hub.css':'hub.css'}[path];
+      const asset={'/':'index.html','/hub.js':'hub.js','/reviews.js':'reviews.js','/hub.css':'hub.css'}[path];
       if(asset&&req.method==='GET')return send(res,200,readFileSync(join(assets,asset)),asset.endsWith('.js')?'text/javascript; charset=utf-8':asset.endsWith('.css')?'text/css; charset=utf-8':'text/html; charset=utf-8');
       if(path==='/healthz'&&req.method==='GET')return send(res,200,{status:'ok'});
       if(path==='/auth/status'&&req.method==='GET')return send(res,200,{preview,loginAvailable:Boolean(login),storage:preview?'local-preview':'gcp'});
@@ -46,6 +46,15 @@ export function createHubServer({service,sessions,login,origin,preview=false,pre
       if(route==='activity'&&req.method==='GET')return send(res,200,await service.activity(who,scope));
       const folder=route.match(/^folders\/([^/]+)$/);
       if(folder&&req.method==='PUT')return send(res,200,await service.updateFolder(who,scope,folder[1],input));
+      const controlled=route.match(/^files\/([^/]+)\/controlled$/);
+      if(controlled&&req.method==='PUT')return send(res,200,await service.enableApproval(who,scope,controlled[1],input));
+      const decisions=route.match(/^files\/([^/]+)\/approvals\/([^/]+)\/decision$/);
+      if(decisions&&req.method==='PUT')return send(res,200,await service.decideApproval(who,scope,decisions[1],decisions[2],input));
+      const reviews=route.match(/^files\/([^/]+)\/approvals$/);
+      if(reviews&&req.method==='GET')return send(res,200,await service.approvalHistory(who,scope,reviews[1]));
+      if(reviews&&req.method==='POST')return send(res,201,await service.submitApproval(who,scope,reviews[1],input));
+      const publish=route.match(/^files\/([^/]+)\/publications$/);
+      if(publish&&req.method==='POST')return send(res,201,await service.publishApproval(who,scope,publish[1],input));
       const file=route.match(/^files\/([^/]+)(?:\/(versions|content|privacy|grants))?$/);
       if(file){const [,fid,action]=file;
         if(!action&&req.method==='GET')return send(res,200,await service.detail(who,scope,fid));
