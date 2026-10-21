@@ -1,7 +1,7 @@
 // Non-authoritative UI enhancements for the TDSA Document Hub.
 // Never grant access, change application permissions or infer records from DOM state.
 const hubRoot = document.querySelector('#app');
-const viewPreference = { mode: 'list', sort: 'name' };
+const viewPreference = { mode: 'list', sort: 'updated' };
 const icons = {
   list: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.1M3.5 12h.1M3.5 18h.1"/></svg>',
   grid: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
@@ -71,7 +71,7 @@ function enhanceLibrary(panel) {
   heading.className = 'panel-head';
   const title = document.createElement('div');
   const h2 = document.createElement('h2'); h2.textContent='Document library';
-  const subtitle=document.createElement('p'); subtitle.textContent='Browse, organize and manage documents within your access level.';
+  const subtitle=document.createElement('p'); subtitle.textContent='Your documents, organised.';
   title.append(h2,subtitle);
   const count=document.createElement('span'); count.className='panel-head-meta';
   count.textContent=`${rows.length} ${rows.length === 1 ? 'document' : 'documents'} in this view`;
@@ -85,7 +85,7 @@ function enhanceLibrary(panel) {
   orderLabel.textContent='Sort';
   const sort = document.createElement('select');
   sort.id='experience-sort'; sort.setAttribute('aria-label','Sort visible documents');
-  for(const [value,label] of [['name','Name A–Z'],['updated','Recently updated'],['type','File type']]) {
+  for(const [value,label] of [['updated','Last updated'],['name','Name A–Z'],['type','File type']]) {
     const option=document.createElement('option'); option.value=value;option.textContent=label;sort.append(option);
   }
   sort.value=viewPreference.sort;

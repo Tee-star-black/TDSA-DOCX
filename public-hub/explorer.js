@@ -24,6 +24,7 @@ function ico(name,size=18){return `<svg width="${size}" height="${size}" viewBox
 const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pref={filter:'all',folder:null,folderParents:new Map(),expanded:new Set(),selected:null,openFolders:false,scope:'',principal:null,register:null,loading:false,token:0,contextEpoch:0,allowOpen:false};
 const DATE_WINDOW=30*86400000;
+function recentlyUpdated(value){const t=Date.parse(value||'');return Number.isFinite(t)&&t<=Date.now()+86400000&&t>=Date.now()-DATE_WINDOW;}
 function parseDate(value){if(!value)return null;const date=new Date(String(value).slice(0,10)+'T00:00:00Z');return Number.isNaN(+date)?null:date;}
 function withinThirty(value){const t=parseDate(value);if(!t)return false;const today=new Date();today.setUTCHours(0,0,0,0);return +t<=+today+DATE_WINDOW;}
 function dateLabel(value){const d=parseDate(value);return d?d.toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}):'Not set';}
@@ -44,7 +45,7 @@ function getPanel(){return app?.querySelector('#document-panel');}
 function getScope(){return app?.querySelector('.layout')?.dataset.apiBase||'';}
 function rowCollection(panel=getPanel()){return [...(panel?.querySelectorAll('tbody tr')||[])].filter(x=>x.querySelector('.file-name'));}
 function allRows(){return rowCollection();}
-function headingFor(filter){const names={all:'All documents',mine:'My documents',shared:'Shared with me',approvals:'Awaiting my approval',expiring:'Expiring soon',archive:'Archived documents',missing:'Missing required documents'};return names[filter]||filter.replace(/^category:/,'');}
+function headingFor(filter){const names={dashboard:'Recent files',all:'All documents',mine:'My files',shared:'Shared',approvals:'Approvals',expiring:'Expiring',archive:'Archive',missing:'Missing documents',recent:'Recently updated'};return names[filter]||filter.replace(/^category:/,'');}
 function inSelectedFolder(row){
   if(!pref.folder)return true;
   let current=row.dataset.folderId||'';
@@ -61,7 +62,8 @@ function matching(row,filter){
   if(!inSelectedFolder(row))return false;
   if(filter==='archive')return row.dataset.archived==='true';
   if(row.dataset.archived==='true')return false;
-  if(filter==='all')return true;
+  if(filter==='all'||filter==='dashboard')return true;
+  if(filter==='recent')return recentlyUpdated(row.dataset.updated);
   if(filter==='mine')return [row.dataset.owner,row.dataset.author,row.dataset.subject].includes(pref.principal);
   if(filter==='shared')return row.dataset.privacy==='restricted'&&row.dataset.owner!==pref.principal&&row.dataset.author!==pref.principal;
   if(filter==='approvals')return actionable(row);
@@ -88,7 +90,7 @@ async function loadRegister(scope,epoch){
 function makeNav(sidebar){
   if(sidebar.querySelector('.explorer-navigation'))return;
   const nav=createElement('nav','explorer-navigation');nav.setAttribute('aria-label','Document navigation');
-  const items=[['all','All documents','file'],['mine','My documents','file'],['shared','Shared with me','layers'],['approvals','Approvals','check'],['expiring','Expiring soon','clock'],['archive','Archive','folder']];
+  const items=[['dashboard','Dashboard','layers'],['all','All documents','file'],['mine','My files','file'],['shared','Shared','layers'],['approvals','Approvals','check'],['expiring','Expiring','clock'],['archive','Archive','folder']];
   nav.innerHTML='<p class="explorer-caption">DOCUMENTS</p>'+items.map(([key,label,ic])=>`<button type="button" class="explorer-nav-button" data-explorer-filter="${key}" aria-current="${pref.filter===key?'page':'false'}">${ico(ic)}<span>${label}</span><b data-nav-count="${key}" aria-hidden="true"></b></button>`).join('');
   const old=sidebar.querySelector('.folder-title');
   if(old)sidebar.insertBefore(nav,old);else sidebar.append(nav);
@@ -99,7 +101,8 @@ function makeCategories(sidebar){
   const section=app.querySelector('.layout')?.dataset.section||'compliance';
   const labels=categories[section]||[];
   const el=createElement('div','explorer-categories');
-  el.innerHTML=`<p class="explorer-caption">CATEGORIES</p>${labels.map(label=>`<button type="button" class="explorer-category" data-category-filter="${escapeHTML(label)}">${ico('folder',15)}<span>${escapeHTML(label)}</span></button>`).join('')}`;
+  const short={'Clinical & Medical':'Clinical','Compliance & Governance':'Compliance','HR & Staff':'HR','Templates & Forms':'Templates'};
+  el.innerHTML=`<p class="explorer-caption">FOLDERS</p>${labels.map(label=>`<button type="button" class="explorer-category" data-category-filter="${escapeHTML(label)}">${ico('folder',15)}<span>${escapeHTML(short[label]||label)}</span></button>`).join('')}`;
   const note=sidebar.querySelector('.side-note');if(note)sidebar.insertBefore(el,note);else sidebar.append(el);
   el.querySelectorAll('[data-category-filter]').forEach(b=>b.onclick=()=>setFilter('category:'+b.dataset.categoryFilter));
 }
@@ -129,7 +132,7 @@ function addTopActions(){
   const actions=createElement('div','explorer-top-actions');
   actions.innerHTML=`<button class="explorer-mobile-toggle" id="explorer-mobile-toggle" aria-label="Open folders and navigation" aria-expanded="false">${ico('menu')}</button><button type="button" class="explorer-search-shortcut">${ico('search')}<span>Search documents</span><kbd>/</kbd></button><button type="button" class="explorer-new-folder">${ico('folder')}<span>New folder</span></button><button type="button" class="explorer-upload">${ico('upload')}<span>Upload</span></button><button type="button" class="explorer-alerts" aria-label="Show approvals awaiting your review">${ico('bell')}<i data-alert-count></i></button>`;
   const user=top.querySelector('.user');if(user)top.insertBefore(actions,user);else top.append(actions);
-  actions.querySelector('.explorer-search-shortcut').onclick=()=>main.querySelector('#search input')?.focus();
+  actions.querySelector('.explorer-search-shortcut').onclick=()=>app.querySelector('#search input')?.focus();
   actions.querySelector('.explorer-new-folder').onclick=()=>app.querySelector('#new-folder')?.click();
   actions.querySelector('.explorer-upload').onclick=()=>app.querySelector('#upload')?.click();
   actions.querySelector('.explorer-alerts').onclick=()=>setFilter('approvals');
@@ -157,14 +160,17 @@ function addSummary(main){
   if(main.querySelector('.explorer-dashboard'))return;
   const old=main.querySelector('.stats');if(old)old.hidden=true;
   const strip=createElement('section','explorer-dashboard');strip.setAttribute('aria-label','Document actions requiring attention');
-  strip.innerHTML=`<button type="button" data-summary="approvals"><span>AWAITING MY APPROVAL</span><strong data-count-approvals>0</strong><small>Open review queue ${ico('arrow',15)}</small></button><button type="button" data-summary="expiring"><span>EXPIRING SOON</span><strong data-count-expiring>0</strong><small>Expired or due in 30 days ${ico('arrow',15)}</small></button><button type="button" data-summary="missing"><span>MISSING REQUIRED DOCUMENTS</span><strong data-count-missing>—</strong><small data-required-hint>Requirement register not configured</small></button>`;
+  strip.innerHTML=`<button type="button" data-summary="approvals" aria-label="View documents awaiting approval"><span class="summary-glyph summary-blue">${ico('file',25)}</span><span class="summary-data"><strong data-count-approvals>0</strong><span>Awaiting approval</span></span>${ico('arrow',17)}</button>
+    <button type="button" data-summary="expiring" aria-label="View expiring documents"><span class="summary-glyph summary-amber">${ico('clock',25)}</span><span class="summary-data"><strong data-count-expiring>0</strong><span>Expiring soon</span></span>${ico('arrow',17)}</button>
+    <button type="button" data-summary="missing" aria-label="View missing required documents"><span class="summary-glyph summary-rose">${ico('info',25)}</span><span class="summary-data"><strong data-count-missing>—</strong><span>Missing docs</span></span>${ico('arrow',17)}</button>
+    <button type="button" data-summary="recent" aria-label="View recently updated documents"><span class="summary-glyph summary-mint">${ico('layers',25)}</span><span class="summary-data"><strong data-count-recent>0</strong><span>Recently updated</span></span>${ico('arrow',17)}</button>`;
   const panel=main.querySelector('#document-panel');if(panel)main.insertBefore(strip,panel);else main.append(strip);
   strip.querySelectorAll('[data-summary]').forEach(b=>b.onclick=()=>setFilter(b.dataset.summary));
 }
 function addInspector(main){
   if(main.querySelector('#explorer-inspector'))return;
   const inspector=createElement('aside','explorer-inspector');inspector.id='explorer-inspector';inspector.setAttribute('aria-label','Selected document details');
-  inspector.innerHTML=`<div class="explorer-empty-inspector">${ico('file',32)}<h2>Document details</h2><p>Select a document to preview it, review its history, and see available actions.</p></div>`;
+  inspector.innerHTML=`<div class="explorer-empty-inspector"><span class="empty-document-glyph">${ico('file',35)}</span><h2>Select a document</h2><p>Preview · Access · Versions</p></div>`;
   const panel=main.querySelector('#document-panel');if(!panel)return;
   const shell=createElement('div','explorer-work-area');const list=createElement('div','explorer-document-list');
   panel.replaceWith(shell);shell.append(list,inspector);list.append(panel);
@@ -174,8 +180,9 @@ function updateCounts(){
   const rows=rowCollection(panel);
   const approvals=rows.filter(actionable).length;
   const expiring=rows.filter(r=>r.dataset.archived!=='true'&&withinThirty(r.dataset.expiry)).length;
+  const recent=rows.filter(r=>r.dataset.archived!=='true'&&recentlyUpdated(r.dataset.updated)).length;
   const missing=pref.register?.configured?pref.register.missing:null;
-  const figures={approvals,expiring,missing:missing===null?'—':missing};
+  const figures={approvals,expiring,recent,missing:missing===null?'—':missing};
   for(const [name,count]of Object.entries(figures)){
     const el=app.querySelector(`[data-count-${name}]`);if(el)el.textContent=String(count);
   }
@@ -212,7 +219,7 @@ function setFilter(filter){
   closeInspector();toggleMobile(false);
   if(filter==='missing')showRequirements();else applyFilter();
 }
-function closeInspector(){pref.selected=null;++pref.token;const panel=app.querySelector('#explorer-inspector');if(panel){panel.classList.remove('open');panel.querySelector('.explorer-inspector-inner')?.remove();}document.body.classList.remove('inspector-open');}
+function closeInspector(){pref.selected=null;++pref.token;app.querySelectorAll('tr[data-file-id]').forEach(r=>r.classList.remove('is-selected'));const panel=app.querySelector('#explorer-inspector');if(panel){panel.classList.remove('open');panel.querySelector('.explorer-inspector-inner')?.remove();}document.body.classList.remove('inspector-open');}
 function fullDocument(id,action){
   // Let the hub open its existing detail view and optional action in one awaited
   // operation. MutationObserver-driven synthetic button clicks caused races.
@@ -226,7 +233,7 @@ function fullDocument(id,action){
 }
 async function openInspector(id,label){
   const inspector=app.querySelector('#explorer-inspector');if(!inspector)return;
-  pref.selected=id;const token=++pref.token;
+  pref.selected=id;app.querySelectorAll('tr[data-file-id]').forEach(r=>r.classList.toggle('is-selected',r.dataset.fileId===id));const token=++pref.token;
   inspector.classList.add('open');document.body.classList.add('inspector-open');
   inspector.innerHTML=`<div class="explorer-inspector-inner"><div class="inspector-top"><p>DOCUMENT PREVIEW</p><button type="button" class="inspector-close" aria-label="Close document preview">${ico('close')}</button></div><p class="loading">Loading ${escapeHTML(label)}…</p></div>`;
   inspector.querySelector('.inspector-close').onclick=closeInspector;
@@ -240,12 +247,12 @@ async function openInspector(id,label){
     inspector.innerHTML=`<div class="explorer-inspector-inner"><div class="inspector-top"><p>DOCUMENT PREVIEW</p><button type="button" class="inspector-close" aria-label="Close document preview">${ico('close')}</button></div>
       <div class="inspector-document-head"><span class="inspector-document-icon">${ico('file',25)}</span><div><h2>${escapeHTML(f.title)}</h2><p>${escapeHTML(latest?.filename||'Document')} · Version ${escapeHTML(latest?.version||1)}</p></div></div>
       <div class="inspector-preview"><iframe title="Preview of ${escapeHTML(f.title)}" loading="lazy" referrerpolicy="no-referrer" src="${base}/files/${encodeURIComponent(id)}/content?preview=1"></iframe></div>
-      <div class="inspector-actions"><a class="inspector-primary" href="${base}/files/${encodeURIComponent(id)}/content">Download</a><button type="button" data-inspector-action="full">Open full details</button></div>
-      <div class="inspector-divider"><h3>Document information</h3><dl class="inspector-metadata"><div><dt>Owner</dt><dd>${escapeHTML(f.metadata?.owner_name||'Unassigned')}</dd></div><div><dt>Category</dt><dd>${escapeHTML(f.metadata?.category||'General')}</dd></div><div><dt>Privacy</dt><dd>${escapeHTML(f.privacy==='personal'?'Employee record':f.privacy==='restricted'?'Named access':f.privacy==='section'?'Section members':'Department team')}</dd></div><div><dt>Expires</dt><dd>${dateLabel(expiry)}</dd></div><div><dt>Review due</dt><dd>${dateLabel(review)}</dd></div><div><dt>Status</dt><dd><span class="document-status ${status.tone}">${escapeHTML(status.text)}</span></dd></div></dl></div>
-      <div class="inspector-divider"><h3>Versions & history</h3><div class="inspector-version-list">${f.versions.map(v=>`<div><span>Version ${v.version}</span><a href="${base}/files/${encodeURIComponent(id)}/content?version=${v.version}">Download</a></div>`).join('')}</div></div>
+      <div class="inspector-actions"><a class="inspector-primary" href="${base}/files/${encodeURIComponent(id)}/content">${ico('upload',17)} Download</a>${canEdit?`<button type="button" data-inspector-action="version">${ico('file',17)} New version</button>`:`<button type="button" data-inspector-action="full">Details</button>`}</div>
+      <div class="inspector-divider"><h3>Details</h3><dl class="inspector-metadata"><div><dt>Owner</dt><dd>${escapeHTML(f.metadata?.owner_name||'Unassigned')}</dd></div><div><dt>Category</dt><dd>${escapeHTML(f.metadata?.category||'General')}</dd></div><div><dt>Privacy</dt><dd>${escapeHTML(f.privacy==='personal'?'Employee record':f.privacy==='restricted'?'Named access':f.privacy==='section'?'Section members':'Department team')}</dd></div><div><dt>Expires</dt><dd>${dateLabel(expiry)}</dd></div><div><dt>Review due</dt><dd>${dateLabel(review)}</dd></div><div><dt>Status</dt><dd><span class="document-status ${status.tone}">${escapeHTML(status.text)}</span></dd></div></dl></div>
+      <div class="inspector-divider"><h3>Version history</h3><div class="inspector-version-list">${f.versions.map(v=>`<div><span>Version ${v.version}</span><a href="${base}/files/${encodeURIComponent(id)}/content?version=${v.version}">Download</a></div>`).join('')}</div></div>
       ${f.requires_approval?`<div class="inspector-divider"><h3>Review & publication</h3><p>${escapeHTML(approval?approval.status:'Draft')} ${history.publishedVersion?`· Published v${history.publishedVersion}`:'· Not published'}</p></div>`:''}
-      <div class="inspector-management">${canEdit?`<button type="button" data-inspector-action="classify">Edit classification</button><button type="button" data-inspector-action="version">Upload new version</button>`:''}${canManage?`<button type="button" data-inspector-action="access">Manage access</button>`:''}${canEdit&&f.requires_approval&&approval?.status!=='pending'&&approval?.status!=='approved'&&history.publishedVersion!==latest.version?`<button type="button" data-inspector-action="submit">Request approval</button>`:''}${canManage&&approval?.status==='pending'&&approval.submitted_by!==pref.principal&&latest.author_id!==pref.principal?`<button type="button" data-inspector-action="approve">Approve version</button><button type="button" data-inspector-action="reject">Request changes</button>`:''}${canManage&&approval?.status==='approved'&&history.publishedVersion!==latest.version?`<button type="button" data-inspector-action="publish">Publish approved version</button>`:''}</div>
-      <p class="inspector-security-note">Access and document history are checked by the server on every request.</p></div>`;
+      <div class="inspector-management">${canEdit?`<button type="button" data-inspector-action="classify">${ico('layers',16)} Edit metadata</button>`:''}${canManage?`<button type="button" data-inspector-action="access">${ico('layers',16)} Manage access</button>`:''}${canEdit&&f.requires_approval&&approval?.status!=='pending'&&approval?.status!=='approved'&&history.publishedVersion!==latest.version?`<button type="button" data-inspector-action="submit">Request approval</button>`:''}${canManage&&approval?.status==='pending'&&approval.submitted_by!==pref.principal&&latest.author_id!==pref.principal?`<button type="button" data-inspector-action="approve">Approve version</button><button type="button" data-inspector-action="reject">Request changes</button>`:''}${canManage&&approval?.status==='approved'&&history.publishedVersion!==latest.version?`<button type="button" data-inspector-action="publish">Publish approved version</button>`:''}</div>
+      <button type="button" class="inspector-full-details" data-inspector-action="full">Full details ${ico('arrow',14)}</button></div>`;
     inspector.querySelector('.inspector-close').onclick=closeInspector;
     inspector.querySelectorAll('[data-inspector-action]').forEach(b=>b.onclick=async()=>{
       const action=b.dataset.inspectorAction;
@@ -265,7 +272,7 @@ async function openInspector(id,label){
     });
   }catch(err){if(token!==pref.token)return;inspector.innerHTML=`<div class="explorer-inspector-inner"><div class="inspector-top"><p>DOCUMENT PREVIEW</p><button type="button" class="inspector-close">${ico('close')}</button></div><p>${escapeHTML(err.message)}</p></div>`;inspector.querySelector('button').onclick=closeInspector;}
 }
-function refreshLibrary(){closeInspector();const form=getPanel()?.querySelector('#search');form?.requestSubmit();}
+function refreshLibrary(){closeInspector();const form=app.querySelector('#search');form?.requestSubmit();}
 function modal(title,fields,onSubmit){
   let el=document.querySelector('#explorer-dialog');if(!el){el=document.createElement('dialog');el.id='explorer-dialog';document.body.append(el);}
   el.innerHTML=`<form method="dialog"><header><h2>${escapeHTML(title)}</h2><button type="button" data-dialog-close aria-label="Close">${ico('close')}</button></header>${fields}<p class="explorer-form-error" role="alert"></p><footer><button value="cancel" type="button" data-dialog-close>Cancel</button><button class="primary" type="submit">Save changes</button></footer></form>`;
