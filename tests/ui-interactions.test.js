@@ -1,3 +1,4 @@
+import {matchesAdvanced,validDateRange} from '../public-hub/advanced-filters.js';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {test} from 'node:test';
@@ -7,7 +8,7 @@ const explorer=readFileSync(new URL('../public-hub/explorer.js',import.meta.url)
 const hub=readFileSync(new URL('../public-hub/hub.js',import.meta.url),'utf8');
 const experience=readFileSync(new URL('../public-hub/experience.js',import.meta.url),'utf8');
 
-function check(code){return runInNewContext(explorer+'\n'+code,{document:{querySelector:()=>null},window:{},console});}
+function check(code){return runInNewContext(explorer.replace(/^import .*$/m,'')+'\n'+code,{document:{querySelector:()=>null},window:{},console,matchesAdvanced,validDateRange});}
 
 test('folder scope includes descendants without showing adjacent folders',()=>{
   assert.equal(check(`pref.folder='parent';pref.folderParents=new Map([['child','parent'],['sibling',''],['parent','']]);matching({dataset:{folderId:'child',archived:'false'}},'all')`),true);
