@@ -122,7 +122,7 @@ export function documentService(pool,storage,scanner){
       }
       // Recheck membership, privacy and revision after external calls. Failed
       // transactions leave an unreferenced private object for reconciliation.
-      return run(principal,scope,async(c,a)=>{
+      try { return await run(principal,scope,async(c,a)=>{
         await preflight(c,a);const fid=fileId??randomUUID(),oid=randomUUID(),vid=randomUUID();
         if(!fileId){
           await c.query('INSERT INTO document_hub.files(organisation_id,facility_id,section,id,folder_id,title,privacy,subject_id,requires_approval) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[...scopeValues(a),fid,input.folderId??null,title,input.privacy??'team',input.subjectId??null,input.requiresApproval===true]);
@@ -141,7 +141,17 @@ export function documentService(pool,storage,scanner){
             AND principal_id=$6 AND request_id=$7 AND fingerprint=$8 AND file_id IS NULL`,
           [fid,count.n,...scopeValues(a),principal,requestId,fingerprint]);
         await audit(c,a,'file.version_added',fid);return {id:fid,version:count.n};
-      });
+      }); } catch(error) {
+        // A rolled-back transaction must not hold a request identifier forever.
+        // The private blob may still exist; reconciliation is a separate task.
+        if(reserved)await run(principal,scope,async(c,a)=>{
+          await c.query(`DELETE FROM document_hub.upload_requests
+            WHERE organisation_id=$1 AND facility_id=$2 AND section=$3
+              AND principal_id=$4 AND request_id=$5 AND file_id IS NULL`,
+            [...scopeValues(a),principal,requestId]);
+        }).catch(()=>{});
+        throw error;
+      }
     },
     detail(principal,scope,fileId){return run(principal,scope,async(c,a)=>{
       const f=await getFile(c,fileId);const {rows:versions}=await c.query('SELECT id,version,filename,mime,author_id,created_at FROM document_hub.file_versions WHERE file_id=$1 ORDER BY version DESC',[f.id]);
