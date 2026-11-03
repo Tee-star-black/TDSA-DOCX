@@ -1,3 +1,4 @@
+import {matchesAdvanced,validDateRange} from '../public-hub/advanced-filters.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -6,7 +7,7 @@ import {createHubServer} from '../src/runtime/server.js';
 
 const asset=name=>readFileSync(new URL('../public-hub/'+name,import.meta.url),'utf8');
 const explorer=asset('explorer.js'),modern=asset('modern.js'),css=asset('modern.css');
-const run=expression=>runInNewContext(explorer+'\n'+expression,{document:{querySelector:()=>null},window:{},console});
+const run=expression=>runInNewContext(explorer.replace(/^import .*$/m,'')+'\n'+expression,{document:{querySelector:()=>null},window:{},console,matchesAdvanced,validDateRange});
 
 test('dashboard summaries are derived from real authorized document rows',()=>{
   for(const marker of ['data-count-approvals','data-count-expiring','data-count-missing','data-count-recent'])
