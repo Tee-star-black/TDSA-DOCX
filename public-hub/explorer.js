@@ -1,3 +1,4 @@
+import {matchesAdvanced, validDateRange} from './advanced-filters.js';
 // TDSA Document Hub explorer: view-layer only. Authorisation stays in the API.
 // Server-side filtered rows are the only documents that this UI can display.
 const app = document.querySelector('#app');
@@ -22,7 +23,7 @@ const icon = {
 };
 function ico(name,size=18){return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${icon[name]||icon.file}</svg>`;}
 const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const pref={filter:'all',folder:null,folderParents:new Map(),expanded:new Set(),selected:null,openFolders:false,scope:'',principal:null,register:null,loading:false,token:0,contextEpoch:0,allowOpen:false};
+const pref={filter:'all',folder:null,folderParents:new Map(),expanded:new Set(),selected:null,openFolders:false,scope:'',principal:null,register:null,loading:false,token:0,contextEpoch:0,allowOpen:false,advanced:{type:'',category:'',privacy:'',owner:'',status:'',from:'',to:''}};
 const DATE_WINDOW=30*86400000;
 function recentlyUpdated(value){const t=Date.parse(value||'');return Number.isFinite(t)&&t<=Date.now()+86400000&&t>=Date.now()-DATE_WINDOW;}
 function parseDate(value){if(!value)return null;const date=new Date(String(value).slice(0,10)+'T00:00:00Z');return Number.isNaN(+date)?null:date;}
@@ -59,7 +60,7 @@ function inSelectedFolder(row){
   return false;
 }
 function matching(row,filter){
-  if(!inSelectedFolder(row))return false;
+  if(!inSelectedFolder(row) || !matchesAdvanced(row,pref.advanced,pref.principal))return false;
   if(filter==='archive')return row.dataset.archived==='true';
   if(row.dataset.archived==='true')return false;
   if(filter==='all'||filter==='dashboard')return true;
@@ -189,6 +190,49 @@ function updateCounts(){
   const helper=app.querySelector('[data-required-hint]');if(helper)helper.textContent=missing===null?'Set up required documents':'View missing documents';
   const alerts=app.querySelector('[data-alert-count]');if(alerts){alerts.textContent=approvals?String(approvals):'';alerts.hidden=!approvals;}
   for(const filter of ['approvals','expiring']){const count=app.querySelector(`[data-nav-count="${filter}"]`);if(count)count.textContent=String(figures[filter]);}
+}
+function addAdvancedFilters(panel) {
+  if(panel.querySelector('#explorer-advanced-filters'))return;
+  const controls=createElement('fieldset','explorer-advanced-filters');
+  controls.id='explorer-advanced-filters';
+  controls.innerHTML=`<legend>Refine documents</legend>
+    <label>File type<select data-advanced="type"><option value="">All types</option><option>PDF</option><option>DOCX</option><option>TXT</option></select></label>
+    <label>Category<select data-advanced="category"><option value="">All categories</option></select></label>
+    <label>Access<select data-advanced="privacy"><option value="">All access levels</option><option value="section">Section members</option><option value="team">Department team</option><option value="personal">Employee record</option><option value="restricted">Named access</option></select></label>
+    <label>Owner<select data-advanced="owner"><option value="">Any owner</option><option value="mine">Assigned to me</option><option value="unassigned">Unassigned</option></select></label>
+    <label>Status<select data-advanced="status"><option value="">Any status</option></select></label>
+    <label>Updated from<input type="date" data-advanced="from"></label>
+    <label>Updated to<input type="date" data-advanced="to"></label>
+    <button type="button" data-advanced-clear>Clear filters</button>`;
+  const rows=rowCollection(panel);
+  const categoriesAvailable=[...new Set(rows.map(row=>row.dataset.category||'General'))].sort((a,b)=>a.localeCompare(b));
+  const statusesAvailable=[...new Set(rows.map(row=>row.querySelector('[data-document-status]')?.textContent?.trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  for(const [key,values] of [['category',categoriesAvailable],['status',statusesAvailable]]) {
+    const select=controls.querySelector('[data-advanced="'+key+'"]');
+    for(const value of values){const option=document.createElement('option');option.value=value;option.textContent=value;select.append(option);}
+  }
+  for(const input of controls.querySelectorAll('[data-advanced]')){
+    const key=input.dataset.advanced;
+    input.value=pref.advanced[key]||'';
+    input.addEventListener('change',()=>{
+      const candidate={...pref.advanced,[key]:input.value};
+      if(!validDateRange(candidate.from,candidate.to)){
+        input.setCustomValidity('The start date must not be after the end date.');
+        input.reportValidity();
+        input.value=pref.advanced[key]||'';
+        return;
+      }
+      for(const dateInput of controls.querySelectorAll('input[type="date"]'))dateInput.setCustomValidity('');
+      pref.advanced=candidate;applyFilter();
+    });
+  }
+  controls.querySelector('[data-advanced-clear]').addEventListener('click',()=>{
+    pref.advanced={type:'',category:'',privacy:'',owner:'',status:'',from:'',to:''};
+    for(const input of controls.querySelectorAll('[data-advanced]'))input.value='';
+    for(const dateInput of controls.querySelectorAll('input[type="date"]'))dateInput.setCustomValidity('');
+    applyFilter();
+  });
+  panel.querySelector('.toolbar')?.insertAdjacentElement('afterend',controls);
 }
 function applyFilter(){
   const panel=getPanel();if(!panel)return;
@@ -322,7 +366,7 @@ function enhance(){
     // Never reuse cached identity or register data across sessions.
     if(pref.scope){
       pref.scope='';pref.principal=null;pref.register=null;pref.folder=null;
-      pref.folderParents.clear();pref.expanded.clear();pref.filter='all';
+      pref.folderParents.clear();pref.expanded.clear();pref.filter='all';pref.advanced={type:'',category:'',privacy:'',owner:'',status:'',from:'',to:''};
       ++pref.contextEpoch;closeInspector();toggleMobile(false);
     }
     return;
@@ -332,7 +376,7 @@ function enhance(){
   const switchedScope=scope!==pref.scope;
   const isNewScreen=main.dataset.explorerReady!=='true';
   if(switchedScope){
-    pref.scope=scope;pref.filter='all';pref.folder=null;pref.selected=null;pref.expanded.clear();pref.folderParents.clear();
+    pref.scope=scope;pref.filter='all';pref.advanced={type:'',category:'',privacy:'',owner:'',status:'',from:'',to:''};pref.folder=null;pref.selected=null;pref.expanded.clear();pref.folderParents.clear();
     pref.principal=null;pref.register=null;
     const epoch=++pref.contextEpoch;
     loadContext(epoch).then(()=>{if(epoch===pref.contextEpoch){updateCounts();applyFilter();}});
@@ -347,7 +391,7 @@ function enhance(){
   if(!isNewScreen)return;
   main.dataset.explorerReady='true';
   const side=layout.querySelector('.sidebar');if(side){makeNav(side);makeFolderTree(side);makeCategories(side);}
-  addTopActions();addSummary(main);enrichTable(panel);addInspector(main);
+  addTopActions();addSummary(main);enrichTable(panel);addAdvancedFilters(panel);addInspector(main);
   updateCounts();applyFilter();
   const veil=document.querySelector('#explorer-veil')||createElement('button','explorer-veil');veil.id='explorer-veil';veil.type='button';veil.hidden=true;veil.setAttribute('aria-label','Close navigation');veil.onclick=()=>toggleMobile(false);if(!veil.isConnected)document.body.append(veil);
   if(!document.querySelector('#explorer-status')){const announceNode=createElement('p','sr-only');announceNode.id='explorer-status';announceNode.setAttribute('role','status');announceNode.setAttribute('aria-live','polite');document.body.append(announceNode);}
