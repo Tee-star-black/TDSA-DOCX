@@ -1,0 +1,20 @@
+/* Scoped multi-file upload queue, keyboard accessible and responsive. */
+.hub-batch-upload{width:min(680px,calc(100vw - 24px));max-height:min(88vh,800px);padding:22px;border:1px solid #dce6f3;border-radius:12px;background:white;color:#213651;box-shadow:0 24px 70px #172f4d44}
+.hub-batch-upload::backdrop{background:#132c4970}
+.hub-batch-upload .batch-head{display:flex;gap:12px;justify-content:space-between;align-items:start}
+.hub-batch-upload h2{font-size:20px;margin:0 0 6px}
+.hub-batch-upload .batch-head p,.hub-batch-upload .batch-warning{font-size:12px;line-height:1.5;color:#536781}
+.hub-batch-upload button{border:1px solid #d4e0ef;border-radius:7px;background:#fff;padding:8px 12px;color:#264b83;min-height:38px;font-weight:600}
+.hub-batch-upload button:disabled{opacity:.5;cursor:not-allowed}
+.hub-batch-upload button:focus-visible,.hub-batch-upload input:focus-visible{outline:3px solid #2465dd;outline-offset:2px}
+.hub-batch-upload .batch-picker{display:grid;gap:8px;padding:15px;border:1px dashed #a9bfdb;border-radius:8px;background:#f7faff;font-size:13px;font-weight:600;margin:14px 0}
+.hub-batch-upload .batch-picker input{max-width:100%}
+.hub-batch-upload .batch-summary{font-size:12px;font-weight:650;margin:16px 0 8px}
+.hub-batch-upload .batch-items{list-style:decimal;margin:0;padding:0 0 0 22px;max-height:36vh;overflow:auto}
+.hub-batch-upload .batch-items li{padding:10px 5px;border-bottom:1px solid #e6edf5;overflow-wrap:anywhere}
+.hub-batch-upload .batch-items strong{display:block;font-size:13px}
+.hub-batch-upload .batch-items span{display:block;font-size:12px;color:#546980;margin:4px 0}
+.hub-batch-upload .batch-error{color:#a32941;font-size:12px;margin:5px 0}
+.hub-batch-upload .batch-footer{display:flex;gap:9px;justify-content:end;margin-top:16px;flex-wrap:wrap}
+.hub-batch-upload [data-batch-start]{background:#235ed2;color:white;border-color:#235ed2}
+@media(max-width:600px){.hub-batch-upload{padding:15px}.hub-batch-upload .batch-head{flex-wrap:wrap}.hub-batch-upload .batch-footer button{flex:1}}
