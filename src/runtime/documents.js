@@ -74,8 +74,52 @@ export function documentService(pool,storage,scanner){
         else {if(['personal','restricted','section'].includes(input.privacy))requireManager(a);if(input.requiresApproval){requireManager(a);if(!['section','team'].includes(input.privacy??'team'))throw new HttpError(422,'Only section or team documents can require approval');}await folder(c,input.folderId??null);await validSubject(c,a,input.subjectId);}
       };
       await run(principal,scope,preflight);
-      await scanner.scan(data.bytes,data.hash);
-      const stored=await storage.put(scope,data.bytes,data.hash);
+      // A client-generated UUID identifies one new-file intent; the fingerprint
+      // prevents reusing that key for different bytes or access settings.
+      // Missing keys preserve legacy one-off upload behavior.
+      const requestId=!fileId&&input.requestId!==undefined?id(input.requestId):null;
+      const fingerprint=requestId?digest(JSON.stringify({
+        hash:data.hash,filename:data.filename,title,
+        privacy:input.privacy??'team',subjectId:input.subjectId??null,
+        folderId:input.folderId??null,requiresApproval:input.requiresApproval===true
+      })):null;
+      let reserved=false;
+      if(requestId){
+        const existing=await run(principal,scope,async(c,a)=>{
+          requireEditor(a);
+          const params=[...scopeValues(a),principal,requestId,fingerprint];
+          const inserted=await c.query(`INSERT INTO document_hub.upload_requests
+            (organisation_id,facility_id,section,principal_id,request_id,fingerprint)
+            VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING RETURNING request_id`,params);
+          if(inserted.rows.length){reserved=true;return null;}
+          const {rows:[record]}=await c.query(`SELECT fingerprint,file_id,version FROM document_hub.upload_requests
+            WHERE organisation_id=$1 AND facility_id=$2 AND section=$3
+              AND principal_id=$4 AND request_id=$5`,params.slice(0,5));
+          if(!record)throw new HttpError(409,'An upload with this request identifier is already running');
+          if(record.fingerprint!==fingerprint)throw new HttpError(409,'Upload request identifier already belongs to a different document');
+          if(!record.file_id)throw new HttpError(409,'Upload already in progress. Do not create another request identifier');
+          // Never reveal an inaccessible document through a cached response.
+          await getFile(c,record.file_id);
+          return {id:record.file_id,version:record.version,replayed:true};
+        });
+        if(existing)return existing;
+      }
+      let stored;
+      try {
+        await scanner.scan(data.bytes,data.hash);
+        stored=await storage.put(scope,data.bytes,data.hash);
+      } catch(error) {
+        // Safe to release a reservation only when no database write began.
+        // Unknown storage outcomes can still leave a private orphan object;
+        // operators must reconcile GCS generations before deletion.
+        if(reserved)await run(principal,scope,async(c,a)=>{
+          await c.query(`DELETE FROM document_hub.upload_requests
+            WHERE organisation_id=$1 AND facility_id=$2 AND section=$3
+              AND principal_id=$4 AND request_id=$5 AND file_id IS NULL`,
+            [...scopeValues(a),principal,requestId]);
+        }).catch(()=>{});
+        throw error;
+      }
       // Recheck membership, privacy and revision after external calls. Failed
       // transactions leave an unreferenced private object for reconciliation.
       return run(principal,scope,async(c,a)=>{
@@ -91,6 +135,11 @@ export function documentService(pool,storage,scanner){
         await c.query(`INSERT INTO document_hub.file_metadata(organisation_id,facility_id,section,file_id) VALUES($1,$2,$3,$4)
           ON CONFLICT(organisation_id,facility_id,file_id) DO UPDATE SET review_status='pending',reviewed_by=NULL,reviewed_at=NULL,revision=document_hub.file_metadata.revision+1`,[...scopeValues(a),fid]);
         if(fileId)await c.query('UPDATE document_hub.files SET revision=revision+1 WHERE id=$1',[fid]);
+        if(requestId)await c.query(`UPDATE document_hub.upload_requests
+          SET file_id=$1,version=$2,completed_at=now()
+          WHERE organisation_id=$3 AND facility_id=$4 AND section=$5
+            AND principal_id=$6 AND request_id=$7 AND fingerprint=$8 AND file_id IS NULL`,
+          [fid,count.n,...scopeValues(a),principal,requestId,fingerprint]);
         await audit(c,a,'file.version_added',fid);return {id:fid,version:count.n};
       });
     },
