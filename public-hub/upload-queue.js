@@ -1,5 +1,5 @@
 // Batch uploads are opt-in, section-team scoped and use the existing authenticated
-// JSON upload endpoint. This is not a resumable or idempotent transport.
+// JSON upload endpoint. The backend deduplicates retries using a stable request ID; transfer is not resumable.
 export const MAX_BATCH_FILES = 20;
 export const MAX_FILE_BYTES = 4 * 1024 * 1024;
 const extensions = new Set(['pdf','docx','txt']);
@@ -13,7 +13,7 @@ export function validateBatchFile(file) {
 export function normalizeBatch(files) {
   const selected = Array.from(files || []);
   if (selected.length > MAX_BATCH_FILES) throw Error('Choose no more than 20 files per batch');
-  return selected.map(file => ({file, name:file.name, size:file.size, error:validateBatchFile(file), status:validateBatchFile(file)?'invalid':'queued', progress:0}));
+  return selected.map(file => ({file, name:file.name, size:file.size, error:validateBatchFile(file), status:validateBatchFile(file)?'invalid':'queued', progress:0, requestId:crypto.randomUUID()}));
 }
 export function formatBytes(size) {return size < 1024 ? size+' B' : (size / 1024 / 1024).toFixed(2)+' MiB';}
 function readBase64(file, progress) {
@@ -33,7 +33,7 @@ export function openBatchUpload({files, uploadOne, onComplete, scopeMatches}) {
   modal.setAttribute('aria-labelledby','hub-batch-title');
   modal.innerHTML=`<div class="batch-head"><div><h2 id="hub-batch-title">Upload multiple documents</h2><p>Up to 20 files, 4 MiB each. All files use department-team access.</p></div><button type="button" data-batch-close aria-label="Close upload queue">Close</button></div>
     <label class="batch-picker">Choose PDF, DOCX or TXT documents<input type="file" accept=".pdf,.docx,.txt" multiple></label>
-    <p class="batch-warning">Uploads are scanned and verified by the server when configured. A failed network request may still have saved a document. Check the library before manually retrying.</p>
+    <p class="batch-warning">Uploads are scanned and verified by the server when configured. Retries reuse the original upload identifier to avoid creating duplicate documents. Confirm the result in the library after uncertain network failures.</p>
     <div role="status" aria-live="polite" class="batch-summary">No files selected</div>
     <ol class="batch-items" aria-label="Upload queue"></ol>
     <div class="batch-footer"><button type="button" data-batch-cancel>Cancel remaining</button><button type="button" data-batch-start disabled>Upload queued files</button></div>`;
@@ -57,7 +57,7 @@ export function openBatchUpload({files, uploadOne, onComplete, scopeMatches}) {
       if(entry.status==='failed'){
         const retry=document.createElement('button');retry.type='button';retry.textContent='Retry manually';retry.disabled=running;
         retry.addEventListener('click',()=>{
-          if(!window.confirm('Check the document library first: a failed request may already have completed. Retry this file?'))return;
+          if(!window.confirm('Retry using the same document request ID? If the original upload completed, the server will return its existing result.'))return;
           entry.error=null;entry.status='queued';render();
         });item.append(retry);
       }
@@ -86,7 +86,7 @@ export function openBatchUpload({files, uploadOne, onComplete, scopeMatches}) {
         if(stopped){entry.status='cancelled';break;}
         if(!scopeMatches())throw Error('Workspace changed during upload');
         entry.status='uploading';render();
-        await uploadOne({filename:entry.file.name,content});
+        await uploadOne({filename:entry.file.name,content,requestId:entry.requestId});
         entry.status='completed';successes++;
       }catch(error){entry.status='failed';entry.error=error.message||'Upload failed';}
       render();
