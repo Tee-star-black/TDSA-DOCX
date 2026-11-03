@@ -69,10 +69,8 @@ function initShortcuts(doc) {
   if (root) {
     // Hub screens are replaced asynchronously after sign-in and section changes.
     const observer = new MutationObserver(attachHelpButton);
-    observer.observe(root, {childList: true, subtree: false});
+    observer.observe(root, {childList: true, subtree: true});
     attachHelpButton();
-    // The explorer can insert its toolbar after a root render.
-    doc.addEventListener('tdsa:shortcuts-refresh', attachHelpButton);
   }
 }
 if (typeof document !== 'undefined' && document.body) initShortcuts(document);
