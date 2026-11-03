@@ -1,0 +1,16 @@
+/* Document Hub keyboard help. Dialog is local UI only; no document access changes. */
+.hub-shortcut-help{width:min(440px,calc(100vw - 32px));max-height:min(85vh,680px);overflow:auto;padding:24px;border:1px solid #dce6f3;border-radius:12px;background:#fff;color:#243854;box-shadow:0 24px 70px #162c4a36}
+.hub-shortcut-help::backdrop{background:#152a4770;backdrop-filter:blur(2px)}
+.hub-shortcut-help .shortcut-help-header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.hub-shortcut-help h2{margin:0;font-size:20px;line-height:1.25}
+.hub-shortcut-help p{color:#54677c;font-size:13px;margin:12px 0 18px}
+.hub-shortcut-help dl{margin:0}
+.hub-shortcut-help dl>div{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid #e7eef8}
+.hub-shortcut-help dt{font-size:13px}
+.hub-shortcut-help dd{margin:0;white-space:nowrap}
+.hub-shortcut-help kbd{border:1px solid #d8e3ef;border-bottom-width:2px;background:#f7faff;border-radius:5px;padding:3px 6px;font:600 12px system-ui}
+.hub-shortcut-help button{border:1px solid #d8e3ef;background:#fff;color:#243854;border-radius:7px;min-height:38px;padding:6px 12px;cursor:pointer}
+.hub-shortcut-help button:focus-visible,.hub-shortcut-trigger:focus-visible{outline:3px solid #2465dd;outline-offset:3px}
+.explorer-top-actions .hub-shortcut-trigger{width:40px;min-width:40px;padding:0;font-size:18px;font-weight:700}
+@media(max-width:680px){.hub-shortcut-help{padding:18px}.hub-shortcut-help dl>div{align-items:flex-start;flex-direction:column;gap:8px}}
+@media(prefers-reduced-motion:reduce){.hub-shortcut-help,.hub-shortcut-trigger{animation:none!important;transition:none!important}}
