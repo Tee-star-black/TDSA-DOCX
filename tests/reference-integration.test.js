@@ -6,7 +6,7 @@ import {sessionStore} from '../src/runtime/identity.js';
 import {createHubServer} from '../src/runtime/server.js';
 
 test('reference resolution requires a real Hub session and current document access',async()=>{
-  const {pool}=await previewDatabase();
+  const {pool,admin}=await previewDatabase();
   const service=documentService(pool,memoryStorage(),previewScanner);
   const sessions=sessionStore(pool,{secure:false});
   let server;
@@ -34,7 +34,7 @@ test('reference resolution requires a real Hub session and current document acce
     assert.equal(typeof data.versionId,'string');
     assert.equal(JSON.stringify(data).includes('synthetic only'),false);
     assert.equal((await read(own,ref+'?version=999')).status,404);
-    await pool.query('UPDATE hub_identity.memberships SET active=false WHERE principal_id=$1',[profiles.employee.id]);
+    await admin(db=>db.query('UPDATE hub_identity.memberships SET active=false WHERE principal_id=$1',[profiles.employee.id]));
     assert.equal((await read(own)).status,403);
   }finally{
     if(server)await new Promise(resolve=>server.close(resolve));
