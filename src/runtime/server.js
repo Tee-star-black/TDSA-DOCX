@@ -55,6 +55,23 @@ export function createHubServer({service,sessions,login,origin,preview=false,pre
       if(reviews&&req.method==='POST')return send(res,201,await service.submitApproval(who,scope,reviews[1],input));
       const publish=route.match(/^files\/([^/]+)\/publications$/);
       if(publish&&req.method==='POST')return send(res,201,await service.publishApproval(who,scope,publish[1],input));
+      // Resolve a stable reference only after checking the requesting user's Hub session.
+      // This endpoint returns no bytes, signed URLs, grants or reusable access tokens.
+      const reference=route.match(/^files\/([^/]+)\/reference$/);
+      if(reference&&req.method==='GET'){
+        const detail=await service.detail(who,scope,reference[1]);
+        if(detail.archived)throw new HttpError(404,'Document not found');
+        const requested=url.searchParams.get('version');
+        if(requested!==null&&!/^[1-9][0-9]*$/.test(requested))throw new HttpError(422,'Invalid document version');
+        const published=detail.requires_approval?(await service.approvalHistory(who,scope,reference[1])).publishedVersion:null;
+        const version=requested===null?(detail.requires_approval?published:detail.versions[0]?.version):Number(requested);
+        if(detail.requires_approval&&version!==published)throw new HttpError(404,'Published version not found');
+        const selected=detail.versions.find(v=>v.version===version);
+        if(!selected)throw new HttpError(404,'Document version not found');
+        return send(res,200,{kind:'tdsa.document-reference.v1',organisationId:scope.organisationId,
+          facilityId:scope.facilityId,section:scope.section,documentId:detail.id,
+          version:selected.version,versionId:selected.id,title:detail.title});
+      }
       const file=route.match(/^files\/([^/]+)(?:\/(versions|content|privacy|grants))?$/);
       if(file){const [,fid,action]=file;
         if(!action&&req.method==='GET')return send(res,200,await service.detail(who,scope,fid));
