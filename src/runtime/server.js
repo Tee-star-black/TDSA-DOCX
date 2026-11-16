@@ -63,12 +63,11 @@ export function createHubServer({service,sessions,login,origin,preview=false,pre
         if(detail.archived)throw new HttpError(404,'Document not found');
         const requested=url.searchParams.get('version');
         if(requested!==null&&!/^[1-9][0-9]*$/.test(requested))throw new HttpError(422,'Invalid document version');
-        const selected=requested===null?detail.versions[0]:detail.versions.find(v=>v.version===Number(requested));
+        const published=detail.requires_approval?(await service.approvalHistory(who,scope,reference[1])).publishedVersion:null;
+        const version=requested===null?(detail.requires_approval?published:detail.versions[0]?.version):Number(requested);
+        if(detail.requires_approval&&version!==published)throw new HttpError(404,'Published version not found');
+        const selected=detail.versions.find(v=>v.version===version);
         if(!selected)throw new HttpError(404,'Document version not found');
-        if(detail.requires_approval){
-          const history=await service.approvalHistory(who,scope,reference[1]);
-          if(selected.version!==history.publishedVersion)throw new HttpError(404,'Published version not found');
-        }
         return send(res,200,{kind:'tdsa.document-reference.v1',organisationId:scope.organisationId,
           facilityId:scope.facilityId,section:scope.section,documentId:detail.id,
           version:selected.version,versionId:selected.id,title:detail.title});
